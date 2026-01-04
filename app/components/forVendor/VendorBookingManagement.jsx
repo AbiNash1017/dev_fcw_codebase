@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
 const VendorBookingManagement = () => {
@@ -20,10 +21,13 @@ const VendorBookingManagement = () => {
     const [selectedBooking, setSelectedBooking] = useState(null)
     const [verificationPin, setVerificationPin] = useState('')
     const [date, setDate] = useState()
+    const [filterType, setFilterType] = useState('created_at')
 
     const filteredBookings = bookings.filter(booking => {
         if (!date) return true;
-        const bookingDate = new Date(booking.created_at);
+        const dateToCheck = filterType === 'created_at' ? booking.created_at : booking.slot_start_time;
+        if (!dateToCheck) return false;
+        const bookingDate = new Date(dateToCheck);
         return bookingDate.toDateString() === date.toDateString();
     });
 
@@ -118,44 +122,56 @@ const VendorBookingManagement = () => {
                 className={`transition-all duration-500 ease-in-out h-full flex flex-col ${selectedBooking ? 'w-2/3 pr-6' : 'w-full'
                     }`}
             >
-                <div className="flex items-center justify-between mb-4 px-2">
+                <div className="flex items-center justify-between mb-4 px-2 py-1">
                     <h3 className="text-xl font-semibold text-gray-800">Bookings</h3>
-                    <div className="relative inline-block">
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button
-                                    variant={"outline"}
-                                    className={cn(
-                                        "w-[240px] justify-start text-left font-normal border-gray-200 shadow-sm hover:bg-gray-50",
-                                        !date && "text-muted-foreground",
-                                        date && "pr-10"
-                                    )}
+                    <div className="flex items-center gap-3">
+                        <Select value={filterType} onValueChange={setFilterType}>
+                            <SelectTrigger className="w-[160px] bg-white border-gray-200">
+                                <SelectValue placeholder="Date Type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="created_at">Booking Date</SelectItem>
+                                <SelectItem value="slot_start_time">Start Date</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <div className="relative inline-block">
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant={"outline"}
+                                        className={cn(
+                                            "w-[240px] justify-start text-left font-normal border-gray-200 shadow-sm hover:bg-gray-50",
+                                            !date && "text-muted-foreground",
+                                            date && "pr-10"
+                                        )}
+                                    >
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {date ? format(date, "PPP") : <span>Filter by date</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="end">
+                                    <Calendar
+                                        mode="single"
+                                        selected={date}
+                                        onSelect={setDate}
+                                        initialFocus
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                            {date && (
+                                <span
+                                    role="button"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 hover:bg-gray-100 rounded-full p-1 cursor-pointer z-50 text-gray-500 hover:text-gray-900 transition-colors"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDate(undefined);
+                                    }}
                                 >
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {date ? format(date, "PPP") : <span>Filter by date</span>}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="end">
-                                <Calendar
-                                    mode="single"
-                                    selected={date}
-                                    onSelect={setDate}
-                                    initialFocus
-                                />
-                            </PopoverContent>
-                        </Popover>
-                        {date && (
-                            <span
-                                role="button"
-                                className="absolute right-3 top-1/2 -translate-y-1/2 hover:bg-gray-100 rounded-full p-1 cursor-pointer z-50 text-gray-500 hover:text-gray-900 transition-colors"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setDate(undefined);
-                                }}
-                            >
-                                <X className="h-4 w-4" />
-                            </span>
-                        )}
+                                    <X className="h-4 w-4" />
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -369,8 +385,18 @@ const VendorBookingManagement = () => {
                                         <span className="text-sm font-bold text-gray-800">{format(new Date(selectedBooking.slot_start_time), 'PPP p')}</span>
                                     </div>
                                     <div className="flex justify-between p-3 bg-gray-50 rounded-lg">
-                                        <span className="text-sm text-gray-500">Instructor</span>
+                                        <span className="text-sm text-gray-500">Instructor Name</span>
                                         <span className="text-sm font-bold text-gray-800">{selectedBooking.facility_id?.instructor_name || 'N/A'}</span>
+                                    </div>
+                                    <div className="flex justify-between p-3 bg-gray-50 rounded-lg">
+                                        <span className="text-sm text-gray-500">Number of People</span>
+                                        <span className="text-sm font-bold text-gray-800">{selectedBooking.number_of_people}</span>
+                                    </div>
+                                    <div className="flex justify-between p-3 bg-gray-50 rounded-lg">
+                                        <span className="text-sm text-gray-500">Equipments</span>
+                                        <span className="text-sm font-bold text-gray-800 break-words text-right max-w-[60%]">
+                                            {selectedBooking.facility_id?.equipment?.length > 0 ? selectedBooking.facility_id.equipment.join(', ') : 'None'}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -417,10 +443,32 @@ const VendorBookingManagement = () => {
                                     <p className="text-xs uppercase tracking-wide opacity-70 mb-1">Duration</p>
                                     <p className="font-semibold">{selectedBooking.facility_id?.duration_minutes || 60} min</p>
                                 </div>
-                                <div className="p-3 bg-purple-50 text-purple-900 rounded-lg">
+                                <div className="p-3 bg-gray-50 text-gray-900 rounded-lg">
                                     <p className="text-xs uppercase tracking-wide opacity-70 mb-1">Booking Status</p>
                                     <p className="font-semibold truncate">{formatEnum(selectedBooking.status) || 'N/A'}</p>
                                 </div>
+                            </div>
+
+                            {/* Next Steps Card */}
+                            <div className="bg-slate-900 rounded-xl p-5 text-gray-200 mt-4 shadow-lg border border-gray-800">
+                                <h4 className="flex items-center gap-2 font-bold text-lg mb-4 text-white">
+                                    <ClipboardList className="w-5 h-5 text-orange-400" />
+                                    Next Steps:
+                                </h4>
+                                <ul className="space-y-3 text-sm font-medium">
+                                    <li className="flex items-start gap-2 opacity-90">
+                                        Payment already {['PAID', 'COMPLETED', 'STATUS_COMPLETED', 'PAYMENT_STATUS_COMPLETED'].includes(selectedBooking.payment_status?.toUpperCase()) ? 'completed' : (selectedBooking.payment_status?.toLowerCase().replace(/^(payment_status_|status_)/, '').replace(/_/g, ' ') || 'pending')} via {selectedBooking.payment_method || 'wallet'}
+                                    </li>
+                                    <li className="flex items-start gap-2 opacity-90">
+                                        Verify PIN during customer check-in
+                                    </li>
+                                    <li className="flex items-start gap-2 opacity-90">
+                                        Ensure facility is ready for {format(new Date(selectedBooking.slot_start_time), 'hh:mm a')}
+                                    </li>
+                                    <li className="flex items-start gap-2 opacity-90 leading-relaxed">
+                                        Prepare equipment: {selectedBooking.facility_id?.equipment?.length > 0 ? selectedBooking.facility_id.equipment.join(', ') : 'None'}
+                                    </li>
+                                </ul>
                             </div>
 
 
