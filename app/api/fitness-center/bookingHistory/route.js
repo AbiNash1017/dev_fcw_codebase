@@ -40,7 +40,7 @@ export async function GET(request) {
             .populate({
                 path: 'facility_id',
                 model: Facility,
-                select: 'name type duration_minutes instructor_name image_urls'
+                select: 'name type duration_minutes instructor_name image_urls equipment'
             })
             .populate({
                 path: 'fitness_center_id',
