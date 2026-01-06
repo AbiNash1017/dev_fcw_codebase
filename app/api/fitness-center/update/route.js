@@ -3,6 +3,7 @@ import { adminAuth } from '@/lib/firebaseAdmin';
 import dbConnect from '@/lib/db';
 import FitnessCenter from '@/lib/models/fitnessCenters';
 import CenterAdminMetadata from '@/lib/models/CenterAdminMetadata';
+import { convertTimeToMinutes } from '@/lib/utils';
 
 export async function PATCH(request) {
     const authHeader = request.headers.get('Authorization');
@@ -80,7 +81,23 @@ export async function PATCH(request) {
 
         // Update business_hours
         if (body.business_hours) {
-            fitnessCenter.business_hours = body.business_hours;
+            console.log("Received business_hours:", JSON.stringify(body.business_hours, null, 2));
+            const processedHours = { ...body.business_hours };
+            if (processedHours.schedules) {
+                processedHours.schedules = processedHours.schedules.map(sch => ({
+                    ...sch,
+                    time_slots: sch.time_slots ? sch.time_slots.filter(slot => slot !== null).map(slot => {
+                        console.log("Processing slot:", slot);
+                        return {
+                            start_time_minutes: convertTimeToMinutes(slot.start_time_utc || slot.start_time),
+                            end_time_minutes: convertTimeToMinutes(slot.end_time_utc || slot.end_time),
+                        };
+                    }) : []
+                }));
+            }
+            console.log("Processed business_hours:", JSON.stringify(processedHours, null, 2));
+            fitnessCenter.business_hours = processedHours;
+            fitnessCenter.markModified('business_hours');
         }
 
         await fitnessCenter.save();

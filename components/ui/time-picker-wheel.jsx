@@ -3,37 +3,53 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import WheelPicker from './wheel-picker';
 
-const HOURS = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
-const MINUTES = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
-// Optimized minutes for booking? Maybe step of 5? 
-// "allow users to easily choose available booking slots" -> 15 min intervals is common.
-// specific minute might be annoying on a wheel.
-// Let's use 5 minute intervals: 00, 05, ... 55.
+const HOURS = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')); // 01-12
 const MINUTES_5 = Array.from({ length: 12 }, (_, i) => (i * 5).toString().padStart(2, '0'));
+const PERIODS = ['AM', 'PM'];
 
 const TimePickerWheel = ({ value, onChange }) => {
-    // Value format: "HH:mm" 24-hour
+    // Value format: "hh:mm aa" (e.g., "09:00 AM") OR "HH:mm" (fallback support)
 
-    // Parse initial value (supports "HH:mm" 24h)
+    // Parse initial value
     const parseTime = (timeStr) => {
-        if (!timeStr) return { hour: '12', minute: '00' };
+        if (!timeStr) return { hour: '09', minute: '00', period: 'AM' };
 
-        // Fallback to 24-hour parsing
-        const [h, m] = timeStr.split(':').map(Number);
+        // Check for 12h format
+        const match = timeStr.match(/(\d{1,2}):(\d{2})\s?(AM|PM)/i);
+        if (match) {
+            let h = match[1];
+            if (h.length === 1) h = '0' + h;
+            return {
+                hour: h,
+                minute: match[2],
+                period: match[3].toUpperCase()
+            };
+        }
+
+        // Fallback to 24-hour parsing (e.g. from DB or old state)
+        // 14:30 -> 02:30 PM
+        const [hStr, mStr] = timeStr.split(':');
+        const h = parseInt(hStr, 10);
+        const m = parseInt(mStr, 10);
+
+        const period = h >= 12 ? 'PM' : 'AM';
+        let hour12 = h % 12;
+        if (hour12 === 0) hour12 = 12;
 
         return {
-            hour: (h || 0).toString().padStart(2, '0'),
-            minute: (m || 0).toString().padStart(2, '0')
+            hour: hour12.toString().padStart(2, '0'),
+            minute: (mStr || '00').toString().padStart(2, '0'),
+            period
         };
     };
 
     const [selected, setSelected] = useState(parseTime(value));
 
+    // Update internal state if prop changes remotely
     useEffect(() => {
         if (value) {
             const parsed = parseTime(value);
-            // Simple check to prevent loops/unnecessary updates
-            if (parsed.hour !== selected.hour || parsed.minute !== selected.minute) {
+            if (parsed.hour !== selected.hour || parsed.minute !== selected.minute || parsed.period !== selected.period) {
                 setSelected(parsed);
             }
         }
@@ -41,13 +57,10 @@ const TimePickerWheel = ({ value, onChange }) => {
 
     const handleChange = (key, val) => {
         const newSelected = { ...selected, [key]: val };
-        setSelected(newSelected); // Optimistic update
+        setSelected(newSelected);
 
-        // Output format: "HH:mm"
-        const hStr = newSelected.hour.toString().padStart(2, '0');
-        const mStr = newSelected.minute.toString().padStart(2, '0');
-
-        onChange(`${hStr}:${mStr}`);
+        // Output format: "hh:mm aa"
+        onChange(`${newSelected.hour}:${newSelected.minute} ${newSelected.period}`);
     };
 
     const minutesList = useMemo(() => {
@@ -74,6 +87,14 @@ const TimePickerWheel = ({ value, onChange }) => {
                     items={minutesList}
                     value={selected.minute}
                     onChange={(v) => handleChange('minute', v)}
+                />
+            </div>
+            <div className="w-16 ml-2">
+                <WheelPicker
+                    items={PERIODS}
+                    value={selected.period}
+                    onChange={(v) => handleChange('period', v)}
+                    loop={false}
                 />
             </div>
         </div>

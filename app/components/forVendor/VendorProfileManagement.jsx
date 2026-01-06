@@ -6,12 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader, Upload, X, User, Building2, Mail, Phone, Calendar, Clock, Plus, Trash2 } from 'lucide-react';
+import { Loader, Upload, X, Plus, Trash2, Clock, User, Building2, Mail, Phone, Calendar } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
 import { storage } from '@/firebaseConfig';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
-
+import { useFitnessCentre } from '@/app/context/FitnessCentreContext';
+import TimePickerInput from "@/components/ui/time-picker-input";
 const DAYS_MAPPING = {
     'DAY_OF_WEEK_MONDAY': 'Monday',
     'DAY_OF_WEEK_TUESDAY': 'Tuesday',
@@ -23,13 +24,13 @@ const DAYS_MAPPING = {
 };
 
 const DEFAULT_SCHEDULES = [
-    { day: 'DAY_OF_WEEK_MONDAY', is_open: false, time_slots: [{ start_time_utc: '06:00', end_time_utc: '22:00' }] },
-    { day: 'DAY_OF_WEEK_TUESDAY', is_open: false, time_slots: [{ start_time_utc: '06:00', end_time_utc: '22:00' }] },
-    { day: 'DAY_OF_WEEK_WEDNESDAY', is_open: false, time_slots: [{ start_time_utc: '06:00', end_time_utc: '22:00' }] },
-    { day: 'DAY_OF_WEEK_THURSDAY', is_open: false, time_slots: [{ start_time_utc: '06:00', end_time_utc: '22:00' }] },
-    { day: 'DAY_OF_WEEK_FRIDAY', is_open: false, time_slots: [{ start_time_utc: '06:00', end_time_utc: '22:00' }] },
-    { day: 'DAY_OF_WEEK_SATURDAY', is_open: false, time_slots: [{ start_time_utc: '06:00', end_time_utc: '22:00' }] },
-    { day: 'DAY_OF_WEEK_SUNDAY', is_open: false, time_slots: [{ start_time_utc: '06:00', end_time_utc: '22:00' }] },
+    { day: 'DAY_OF_WEEK_MONDAY', is_open: false, time_slots: [{ start_time_utc: '6:00 AM', end_time_utc: '10:00 PM' }] },
+    { day: 'DAY_OF_WEEK_TUESDAY', is_open: false, time_slots: [{ start_time_utc: '6:00 AM', end_time_utc: '10:00 PM' }] },
+    { day: 'DAY_OF_WEEK_WEDNESDAY', is_open: false, time_slots: [{ start_time_utc: '6:00 AM', end_time_utc: '10:00 PM' }] },
+    { day: 'DAY_OF_WEEK_THURSDAY', is_open: false, time_slots: [{ start_time_utc: '6:00 AM', end_time_utc: '10:00 PM' }] },
+    { day: 'DAY_OF_WEEK_FRIDAY', is_open: false, time_slots: [{ start_time_utc: '6:00 AM', end_time_utc: '10:00 PM' }] },
+    { day: 'DAY_OF_WEEK_SATURDAY', is_open: false, time_slots: [{ start_time_utc: '6:00 AM', end_time_utc: '10:00 PM' }] },
+    { day: 'DAY_OF_WEEK_SUNDAY', is_open: false, time_slots: [{ start_time_utc: '6:00 AM', end_time_utc: '10:00 PM' }] },
 ];
 
 const VendorProfileManagement = () => {
@@ -81,6 +82,7 @@ const VendorProfileManagement = () => {
     const headerFileInputRef = useRef(null);
     const profileFileInputRef = useRef(null);
     const { user, loading } = useAuth();
+    const { refreshFitnessCentre } = useFitnessCentre();
     const router = useRouter();
 
     const fetchVendorProfile = async () => {
@@ -127,10 +129,10 @@ const VendorProfileManagement = () => {
                 });
 
                 setLocation({
-                    address: data.fitnessCenter.address || '',
-                    city: data.fitnessCenter.city || '',
-                    state: data.fitnessCenter.state || '',
-                    pincode: data.fitnessCenter.postal_code || ''
+                    address: data.fitnessCenter.location?.address || '',
+                    city: data.fitnessCenter.location?.city || '',
+                    state: data.fitnessCenter.location?.state || '',
+                    pincode: data.fitnessCenter.location?.postal_code || ''
                 });
                 if (data.fitnessCenter.business_hours && data.fitnessCenter.business_hours.schedules && data.fitnessCenter.business_hours.schedules.length > 0) {
                     // Normalize schedules to ensure time_slots use start_time_utc/end_time_utc and filter out null entries
@@ -262,7 +264,7 @@ const VendorProfileManagement = () => {
                 ...gymDetails,
                 address: location.address,
                 pincode: location.pincode,
-                header_image: pendingHeaderImage ? uploadedHeaderImage : (gymDetails.header_image || null),
+                header_image: pendingHeaderImage ? uploadedHeaderImage : gymDetails.header_image,
                 centre_images: [
                     ...gymDetails.centre_images,
                     ...uploadedFitnessCentreImages.filter((img) => img !== null)
@@ -284,6 +286,7 @@ const VendorProfileManagement = () => {
             else alert("Update successful");
 
             fetchVendorProfile();
+            refreshFitnessCentre(); // Refresh global context
             setPendingHeaderImage(null);
             setPendingFitnessImages([]);
         } catch (error) {
@@ -362,7 +365,7 @@ const VendorProfileManagement = () => {
 
     const handleAddSlot = (dayIndex) => {
         const newSchedules = [...businessHours.schedules];
-        newSchedules[dayIndex].time_slots.push({ start_time_utc: '09:00', end_time_utc: '17:00' });
+        newSchedules[dayIndex].time_slots.push({ start_time_utc: '9:00 AM', end_time_utc: '5:00 PM' });
         setBusinessHours({ ...businessHours, schedules: newSchedules });
     };
 
@@ -822,45 +825,48 @@ const VendorProfileManagement = () => {
                                     </div>
                                     {schedule.is_open && (
                                         <div className="flex-1 flex flex-col gap-2">
-                                            {schedule.time_slots.map((slot, slotIndex) => (
-                                                <div key={slotIndex} className="flex items-center gap-2">
-                                                    <Input
-                                                        type="time"
-                                                        value={slot.start_time_utc || ''}
-                                                        onChange={(e) => handleScheduleChange(index, 'start_time_utc', e.target.value, slotIndex)}
-                                                        className="w-32"
-                                                    />
-                                                    <span className="text-gray-500">to</span>
-                                                    <Input
-                                                        type="time"
-                                                        value={slot.end_time_utc || ''}
-                                                        onChange={(e) => handleScheduleChange(index, 'end_time_utc', e.target.value, slotIndex)}
-                                                        className="w-32"
-                                                    />
 
-                                                    {schedule.time_slots.length > 1 && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            onClick={() => handleRemoveSlot(index, slotIndex)}
-                                                            className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
+                                            {
+                                                schedule.time_slots.map((slot, slotIndex) => (
+                                                    <div key={slotIndex} className="flex items-center gap-2">
+                                                        <div className="w-32">
+                                                            <TimePickerInput
+                                                                value={slot.start_time_utc || ''}
+                                                                onChange={(val) => handleScheduleChange(index, 'start_time_utc', val, slotIndex)}
+                                                            />
+                                                        </div>
+                                                        <span className="text-gray-500">to</span>
+                                                        <div className="w-32">
+                                                            <TimePickerInput
+                                                                value={slot.end_time_utc || ''}
+                                                                onChange={(val) => handleScheduleChange(index, 'end_time_utc', val, slotIndex)}
+                                                            />
+                                                        </div>
 
-                                                    {slotIndex === schedule.time_slots.length - 1 && (
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => handleAddSlot(index)}
-                                                            className="gap-1 h-9 ml-2"
-                                                        >
-                                                            <Plus className="h-3 w-3" /> Add Slot
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            ))}
+                                                        {schedule.time_slots.length > 1 && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={() => handleRemoveSlot(index, slotIndex)}
+                                                                className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+
+                                                        {slotIndex === schedule.time_slots.length - 1 && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => handleAddSlot(index)}
+                                                                className="gap-1 h-9 ml-2"
+                                                            >
+                                                                <Plus className="h-3 w-3" /> Add Slot
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                ))
+                                            }
                                         </div>
                                     )}
                                 </div>

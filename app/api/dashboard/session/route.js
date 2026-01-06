@@ -55,11 +55,16 @@ export async function PUT(request) {
 
     try {
         const decodedToken = await adminAuth.verifyIdToken(token);
+        const uid = decodedToken.uid;
         await dbConnect();
+
+        // Get admin metadata using UID
+        const adminMetadata = await CenterAdminMetadata.findOne({ uid });
 
         const body = await request.json();
         const {
             session_id,
+            price,
             price_per_slot,
             per_session_price,
             min_no_of_slots,
@@ -73,27 +78,35 @@ export async function PUT(request) {
         // Normalize fields
         const updatesToApply = { ...updates };
 
-        // Fix Price
-        if (price_per_slot !== undefined) updatesToApply.price_per_slot = parseInt(Math.round(price_per_slot * 1.3));
-        else if (per_session_price !== undefined) updatesToApply.price_per_slot = parseInt(Math.round(per_session_price * 1.3));
-
-        if (body.couple_session_price !== undefined) {
-            updatesToApply.couple_session_price = parseInt(Math.round(body.couple_session_price * 1.3));
-        }
-
         // Sync capacity if slots change
         if (min_no_of_slots !== undefined) {
             updatesToApply.min_no_of_slots = min_no_of_slots;
             updatesToApply.capacity = min_no_of_slots;
         }
 
+        // Map booking constraints to nested schedule object
+        if (updates.max_advance_booking_days !== undefined) {
+            updatesToApply['schedule.max_advance_booking_days'] = updates.max_advance_booking_days;
+            delete updatesToApply.max_advance_booking_days;
+        }
+        if (updates.min_advance_booking_hours !== undefined) {
+            updatesToApply['schedule.min_advance_booking_hours'] = updates.min_advance_booking_hours;
+            delete updatesToApply.min_advance_booking_hours;
+        }
+
+        const updateSet = {
+            ...updatesToApply,
+            'schedule.updated_at': new Date()
+        };
+
+        if (adminMetadata) {
+            updateSet['schedule.updated_by'] = adminMetadata._id;
+        }
+
         const updatedFacility = await Facility.findByIdAndUpdate(
             session_id,
             {
-                $set: {
-                    ...updatesToApply,
-                    updated_at: new Date()
-                }
+                $set: updateSet
             },
             { new: true }
         );
@@ -145,13 +158,14 @@ export async function POST(request) {
             max_advance_booking_days,
             min_advance_booking_hours,
             per_session_price,
-            price_per_slot, // Add this
+            price_per_slot,
+            price, // Add 'price'
             couple_session_price,
             fitness_center_id
         } = body;
 
         // Normalize price
-        const finalPrice = price_per_slot !== undefined ? price_per_slot : per_session_price;
+        const finalPrice = price !== undefined ? price : (price_per_slot !== undefined ? price_per_slot : per_session_price);
 
         if (!fitness_center_id) {
             return NextResponse.json({ error: 'Fitness Center ID is required' }, { status: 400 });
@@ -187,10 +201,12 @@ export async function POST(request) {
             capacity: min_no_of_slots, // Sync capacity with min_no_of_slots for now
             min_no_of_slots,
             icon_image_url: defaultImage,
-            max_advance_booking_days,
-            min_advance_booking_hours,
-            price_per_slot: finalPrice ? parseInt(Math.round(finalPrice * 1.3)) : 0, // Apply 30% markup
-            couple_session_price: couple_session_price ? parseInt(Math.round(couple_session_price * 1.3)) : 0, // Apply 30% markup
+            schedule: {
+                max_advance_booking_days: max_advance_booking_days || 90,
+                min_advance_booking_hours: min_advance_booking_hours || 24,
+                updated_at: new Date(),
+                updated_by: adminMetadata._id
+            },
             updated_by: adminMetadata._id,
             is_active: true
         });

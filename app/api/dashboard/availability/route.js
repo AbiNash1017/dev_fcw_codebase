@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/firebaseAdmin';
 import dbConnect from '@/lib/db';
 import Facility from '@/lib/models/facilities';
+import CenterAdminMetadata from '@/lib/models/CenterAdminMetadata';
+import { convertTimeToMinutes } from '@/lib/utils';
 
 const DAY_MAPPING = [
     'DAY_OF_WEEK_SUNDAY',
@@ -23,20 +25,49 @@ export async function POST(request) {
 
     try {
         const decodedToken = await adminAuth.verifyIdToken(token);
+        const uid = decodedToken.uid;
         await dbConnect();
+
+        // Get admin metadata
+        const adminMetadata = await CenterAdminMetadata.findOne({ uid });
 
         const body = await request.json();
         console.log("Received Availability Payload:", JSON.stringify(body, null, 2));
 
+
         const { availability, removed_days } = body;
 
+        console.log('Availability Request - availability:', availability);
+        console.log('Availability Request - removed_days:', removed_days);
+
+        // Extract session ID from either availability or we'll need it passed separately
+        let sessionId = null;
+        if (availability && availability.length > 0) {
+            sessionId = availability[0].session_id;
+        }
+
         // 1. Handle Removed Days (Explicit Deletion)
-        if (removed_days && Array.isArray(removed_days) && removed_days.length > 0 && availability && availability.length > 0) {
-            const sessionId = availability[0].session_id;
-            console.log("Removing days:", removed_days);
-            await Facility.findByIdAndUpdate(sessionId, {
+        if (removed_days && Array.isArray(removed_days) && removed_days.length > 0) {
+            if (!sessionId) {
+                console.error('Cannot remove days without session_id');
+                return NextResponse.json({ error: 'Session ID required for removal' }, { status: 400 });
+            }
+            console.log("Removing days:", removed_days, "from session:", sessionId);
+
+            const pullResult = await Facility.findByIdAndUpdate(sessionId, {
                 $pull: { 'schedule.schedules': { day: { $in: removed_days } } }
             });
+
+            // Even for removal, we should update updated_at/by
+            const updateSet = {
+                'schedule.updated_at': new Date()
+            };
+            if (adminMetadata) {
+                updateSet['schedule.updated_by'] = adminMetadata._id;
+            }
+            await Facility.findByIdAndUpdate(sessionId, { $set: updateSet });
+
+            console.log('Pull result:', pullResult ? 'Success' : 'Failed');
         }
 
         if (!availability || !Array.isArray(availability) || availability.length === 0) {
@@ -47,8 +78,7 @@ export async function POST(request) {
             return NextResponse.json({ message: 'No availability data provided' }, { status: 400 });
         }
 
-        const sessionId = availability[0].session_id;
-
+        // sessionId already extracted above
         if (!sessionId) {
             return NextResponse.json({ error: 'Session ID missing in availability data' }, { status: 400 });
         }
@@ -71,12 +101,24 @@ export async function POST(request) {
                 scheduleMap[dayEnum] = [];
             }
 
+            // Convert time strings to minutes
+            const timeStr = slot.start_time_utc || slot.start_time;
+            const endTimeStr = slot.end_time_utc || slot.end_time;
+
+            console.log(`Converting times - start: "${timeStr}", end: "${endTimeStr}"`);
+
+            const startMinutes = convertTimeToMinutes(timeStr);
+            const endMinutes = convertTimeToMinutes(endTimeStr);
+
+            console.log(`Converted to minutes - start: ${startMinutes}, end: ${endMinutes}`);
+
+            // Use integer price logic from previous steps
             scheduleMap[dayEnum].push({
-                start_time_utc: slot.start_time_utc,
-                end_time_utc: slot.end_time_utc,
+                start_time_minutes: startMinutes,
+                end_time_minutes: endMinutes,
                 capacity: slot.capacity || facility.capacity,
-                price: slot.price ? (slot.price * 1.3) : facility.price_per_slot,
-                couple_session_price: slot.couple_session_price ? (slot.couple_session_price * 1.3) : facility.couple_session_price,
+                price: slot.price ? Math.round(slot.price * 1.3) : 0,
+                couple_session_price: slot.couple_session_price ? Math.round(slot.couple_session_price * 1.3) : 0,
                 instructor_id: facility.instructor_id,
                 instructor_name: facility.instructor_name
             });
@@ -90,21 +132,20 @@ export async function POST(request) {
             time_slots: scheduleMap[dayEnum]
         }));
 
-        // We want to merge with existing schedules or replace?
-        // Since this is likely a fresh creation flow, push is okay.
-        // Ideally we should check if 'DAY_OF_WEEK_MONDAY' exists and merge slots, 
-        // but to keep it simple and functional for "Create", we will push.
-
-        // Actually, to avoid duplicates if they click save multiple times for same day:
-        // We will pull existing for these days and then push new.
-
         await Facility.findByIdAndUpdate(sessionId, {
             $pull: { 'schedule.schedules': { day: { $in: Object.keys(scheduleMap) } } }
         });
 
-        await Facility.findByIdAndUpdate(sessionId, {
-            $push: { 'schedule.schedules': { $each: newSchedules } }
-        });
+        const updateOperation = {
+            $push: { 'schedule.schedules': { $each: newSchedules } },
+            $set: { 'schedule.updated_at': new Date() }
+        };
+
+        if (adminMetadata) {
+            updateOperation.$set['schedule.updated_by'] = adminMetadata._id;
+        }
+
+        await Facility.findByIdAndUpdate(sessionId, updateOperation);
 
         return NextResponse.json({ message: 'Schedule updated successfully' });
 

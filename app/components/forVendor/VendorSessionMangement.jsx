@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Plus, X, Trash2, Clock, Loader2 } from 'lucide-react'
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -10,13 +11,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Calendar } from "@/components/ui/calendar"
 import TimePickerWheel from "@/components/ui/time-picker-wheel"
-import { cn } from "@/lib/utils"
+import { cn, convertTimeToMinutes, convertMinutesToTime } from "@/lib/utils"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { useFitnessCentre } from '@/app/context/FitnessCentreContext'
 import { useAuth } from '@/app/context/AuthContext'
 import { format } from 'date-fns'
 
+const DAYS_ENUM = [
+    'DAY_OF_WEEK_SUNDAY', 'DAY_OF_WEEK_MONDAY', 'DAY_OF_WEEK_TUESDAY',
+    'DAY_OF_WEEK_WEDNESDAY', 'DAY_OF_WEEK_THURSDAY', 'DAY_OF_WEEK_FRIDAY',
+    'DAY_OF_WEEK_SATURDAY'
+];
+
 const VendorSessionManagement = ({ facilityType }) => {
-    const { fitnessCentreId } = useFitnessCentre()
+    const { fitnessCentreId, fitnessCentreLoading, businessHours } = useFitnessCentre()
     const { user, loading } = useAuth()
 
     const facilityTypes = [
@@ -129,20 +147,12 @@ const VendorSessionManagement = ({ facilityType }) => {
     };
 
     // --- Helper for Time Calculation ---
+    // --- Helper for Time Calculation ---
     const calculateEndTime = (startTimeStr, durationMinutes) => {
         if (!startTimeStr || !durationMinutes) return '';
-
-        // Parse "HH:mm" (24-hour)
-        const [hours, minutes] = startTimeStr.split(':').map(Number);
-
-        // Add duration
-        const totalMinutes = hours * 60 + minutes + parseInt(durationMinutes);
-
-        // Convert back to 24-hour format
-        const endHours24 = Math.floor(totalMinutes / 60) % 24;
-        const endMinutes = totalMinutes % 60;
-
-        return `${endHours24.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+        const startMinutes = convertTimeToMinutes(startTimeStr);
+        const totalMinutes = startMinutes + parseInt(durationMinutes);
+        return convertMinutesToTime(totalMinutes);
     };
 
     // Schedule Handlers
@@ -157,16 +167,68 @@ const VendorSessionManagement = ({ facilityType }) => {
 
     const handleAddSlot = () => {
         if (!currentSlot.start_time || !currentSlot.end_time || !selectedDate) {
-            alert("Please select a start and end time.");
+            toast.error("Please select a start and end time.");
             return;
         }
 
         if (!currentSlot.capacity || parseInt(currentSlot.capacity) <= 0 || !currentSlot.price) {
-            alert("Please enter a valid Capacity (Minimum 1) and Price for the slot.");
+            toast.error("Please enter a valid Capacity (Minimum 1) and Price for the slot.");
             return;
         }
 
         const dayIndex = selectedDate.getDay(); // 0-6
+
+        // Business Hours Validation
+        if (businessHours) {
+            const dayEnum = DAYS_ENUM[dayIndex];
+            const schedule = businessHours.schedules?.find(s => s.day === dayEnum);
+
+            if (schedule) {
+                if (!schedule.is_open) {
+                    toast.error(`The facility is closed on ${format(selectedDate, 'EEEE')}. Cannot add sessions.`);
+                    return;
+                }
+
+                const sessionStart = convertTimeToMinutes(currentSlot.start_time);
+                const sessionEnd = convertTimeToMinutes(currentSlot.end_time);
+
+                // Check if session falls within ANY of the open slots
+                const validSlot = schedule.time_slots?.some(slot => {
+                    // Skip null/undefined slots
+                    if (!slot) return false;
+
+                    // Support both new schema (minutes) and old schema (utc string)
+                    const slotStart = slot.start_time_minutes !== undefined && slot.start_time_minutes !== null
+                        ? slot.start_time_minutes
+                        : convertTimeToMinutes(slot.start_time_utc || slot.start_time);
+                    const slotEnd = slot.end_time_minutes !== undefined && slot.end_time_minutes !== null
+                        ? slot.end_time_minutes
+                        : convertTimeToMinutes(slot.end_time_utc || slot.end_time);
+
+                    if (slotStart === undefined || slotEnd === undefined || slotStart === null || slotEnd === null) return false;
+
+                    return sessionStart >= slotStart && sessionEnd <= slotEnd;
+                });
+
+                if (!validSlot) {
+                    const openTimes = schedule.time_slots
+                        .filter(s => s != null) // Filter out null slots
+                        .map(s => {
+                            const start = (s.start_time_minutes !== undefined && s.start_time_minutes !== null)
+                                ? convertMinutesToTime(s.start_time_minutes)
+                                : (s.start_time_utc || s.start_time || 'N/A');
+                            const end = (s.end_time_minutes !== undefined && s.end_time_minutes !== null)
+                                ? convertMinutesToTime(s.end_time_minutes)
+                                : (s.end_time_utc || s.end_time || 'N/A');
+                            return `${start} - ${end}`;
+                        }).join(', ');
+
+                    toast.error(`Session time (${currentSlot.start_time} - ${currentSlot.end_time}) is outside business hours. Open hours: ${openTimes}`);
+                    return;
+                }
+            }
+        }
+
         const existingSlots = schedules[dayIndex] || [];
 
         // Use slot specific values
@@ -183,10 +245,20 @@ const VendorSessionManagement = ({ facilityType }) => {
         });
 
         // Reset current slot inputs (keep empty to show placeholders)
+        // Resetting start_time to empty might trigger validation or UI issues if TimePicker doesn't handle empty.
+        // But original code did this.
         setCurrentSlot({ start_time: '', end_time: '', capacity: '', price: '', couples_price: '' });
     };
 
     const handleRemoveSlot = (dayIndex, index) => {
+        console.log('handleRemoveSlot called:', { dayIndex, index });
+
+        if (!schedules[dayIndex]) {
+            console.error('No schedules found for day:', dayIndex);
+            toast.error('Error removing slot');
+            return;
+        }
+
         const updatedSlots = schedules[dayIndex].filter((_, i) => i !== index);
         if (updatedSlots.length === 0) {
             const newSchedules = { ...schedules };
@@ -205,12 +277,15 @@ const VendorSessionManagement = ({ facilityType }) => {
                 [dayIndex]: updatedSlots
             });
         }
+        console.log('Showing toast for slot removal');
+        toast.info("Slot removed. Please save changes to persist.");
     };
 
     const [sessionId, setSessionId] = useState(null); // Track if editing existing session
 
     const fetchSessionByType = async (type) => {
-        if (!type || !fitnessCentreId || !user) return;
+        // Wait for fitness center ID to be loaded before making the request
+        if (!type || fitnessCentreLoading || !fitnessCentreId || !user) return;
 
         try {
             const token = await user.getIdToken();
@@ -231,8 +306,8 @@ const VendorSessionManagement = ({ facilityType }) => {
                     name: session.name,
                     description: session.description || '',
                     duration_minutes: session.duration_minutes || '',
-                    max_advance_booking_days: session.max_advance_booking_days || 30,
-                    min_advance_booking_hours: session.min_advance_booking_hours || 2,
+                    max_advance_booking_days: (session.schedule?.max_advance_booking_days) || session.max_advance_booking_days || 30,
+                    min_advance_booking_hours: (session.schedule?.min_advance_booking_hours) || session.min_advance_booking_hours || 2,
                     instructor_name: session.instructor_name || '',
                     requires_booking: session.requires_booking,
                     equipment: session.equipment || [],
@@ -250,13 +325,34 @@ const VendorSessionManagement = ({ facilityType }) => {
                     const loadedSchedules = {};
                     session.schedule.schedules.forEach(daySch => {
                         const dayIndex = daysEnum.indexOf(daySch.day);
-                        if (dayIndex !== -1 && daySch.time_slots) {
-                            loadedSchedules[dayIndex] = daySch.time_slots.map(slot => ({
-                                start_time: slot.start_time_utc || slot.start_time,
-                                end_time: slot.end_time_utc || slot.end_time,
-                                capacity: slot.capacity,
-                                price: slot.price
-                            }));
+                        if (dayIndex !== -1 && daySch.time_slots && Array.isArray(daySch.time_slots)) {
+                            loadedSchedules[dayIndex] = daySch.time_slots
+                                .filter(slot => slot != null) // Filter out null/undefined slots
+                                .map(slot => {
+                                    // Handle start_time - prefer minutes format
+                                    let startTime = '';
+                                    if (slot.start_time_minutes !== undefined && slot.start_time_minutes !== null) {
+                                        startTime = convertMinutesToTime(slot.start_time_minutes);
+                                    } else if (slot.start_time_utc || slot.start_time) {
+                                        startTime = convertMinutesToTime(convertTimeToMinutes(slot.start_time_utc || slot.start_time));
+                                    }
+
+                                    // Handle end_time - prefer minutes format
+                                    let endTime = '';
+                                    if (slot.end_time_minutes !== undefined && slot.end_time_minutes !== null) {
+                                        endTime = convertMinutesToTime(slot.end_time_minutes);
+                                    } else if (slot.end_time_utc || slot.end_time) {
+                                        endTime = convertMinutesToTime(convertTimeToMinutes(slot.end_time_utc || slot.end_time));
+                                    }
+
+                                    return {
+                                        start_time: startTime,
+                                        end_time: endTime,
+                                        capacity: slot.capacity,
+                                        price: slot.price,
+                                        couples_price: slot.couple_session_price
+                                    };
+                                });
                         }
                     });
                     setSchedules(loadedSchedules);
@@ -290,12 +386,12 @@ const VendorSessionManagement = ({ facilityType }) => {
         }
     };
 
-    // Trigger fetch when Type changes
+    // Trigger fetch when Type changes OR when fitnessCentreId becomes available
     useEffect(() => {
-        if (newSession.type) {
+        if (newSession.type && fitnessCentreId && !fitnessCentreLoading) {
             fetchSessionByType(newSession.type);
         }
-    }, [newSession.type]);
+    }, [newSession.type, fitnessCentreId, fitnessCentreLoading]);
 
     const addSession = async (e) => {
         e.preventDefault();
@@ -308,19 +404,24 @@ const VendorSessionManagement = ({ facilityType }) => {
 
         // Validation
         if (!type || !name || !description || !duration_minutes || !instructor_name) {
-            alert('Please fill all the required session fields!');
+            toast.error('Please fill all the required session fields!');
             return;
         }
 
         if (Object.keys(schedules).length === 0) {
-            alert('Please add at least one schedule slot!');
+            toast.error('Please add at least one schedule slot!');
             return;
         }
 
         if (!user) return;
 
+        if (fitnessCentreLoading) {
+            toast.info('Please wait while the fitness center information is loading...');
+            return;
+        }
+
         if (!fitnessCentreId) {
-            alert('Fitness Center ID not found. Please refresh the page and try again.');
+            toast.error('Fitness Center ID not found. Please refresh the page and try again.');
             setIsSaving(false);
             return;
         }
@@ -345,7 +446,7 @@ const VendorSessionManagement = ({ facilityType }) => {
             min_no_of_slots: parseInt(representativeSlot.capacity || 0), // Use first slot capacity
             max_advance_booking_days: parseInt(max_advance_booking_days || 30),
             min_advance_booking_hours: parseInt(min_advance_booking_hours || 2),
-            price_per_slot: parseFloat(representativeSlot.price || 0), // Use first slot price
+            price: parseFloat(representativeSlot.price || 0), // Use first slot price
             couple_session_price: parseFloat(representativeSlot.couples_price || 0), // Use first slot couples price
             fitness_center_id: fitnessCentreId
         };
@@ -370,7 +471,7 @@ const VendorSessionManagement = ({ facilityType }) => {
                 // Check for conflict 
                 if (sessionResponse.status === 409 && sessionData.existing_id) {
                     // Should have been handled by fetch-on-type, but just in case:
-                    alert("A session of this type already exists. Please refresh or select the type again to edit it.");
+                    toast.error("A session of this type already exists. Please refresh or select the type again to edit it.");
                     setIsSaving(false);
                     return;
                 }
@@ -404,15 +505,14 @@ const VendorSessionManagement = ({ facilityType }) => {
                     end_time: slot.end_time,
                     capacity: slot.capacity,
                     price: slot.price,
+                    couple_session_price: slot.couples_price || 0,
                     session_id: activeSessionId
                 }));
             });
 
+
             const availabilityPayload = {
-                availability: availabilityList.map(slot => ({
-                    ...slot,
-                    couple_session_price: slot.couples_price || 0
-                })),
+                availability: availabilityList,
                 removed_days: Array.from(clearedDays)
                     .filter(dayIdx => !schedules[dayIdx]) // Only send if STILL empty (user didn't re-add)
                     .map(dayIdx => {
@@ -425,6 +525,11 @@ const VendorSessionManagement = ({ facilityType }) => {
                     })
             };
 
+
+            console.log('Sending availability payload:', JSON.stringify(availabilityPayload, null, 2));
+            console.log('Current schedules state:', schedules);
+            console.log('Cleared days:', Array.from(clearedDays));
+
             const availabilityResponse = await fetch(`/api/dashboard/availability`, {
                 method: 'POST',
                 headers: {
@@ -435,27 +540,18 @@ const VendorSessionManagement = ({ facilityType }) => {
             });
 
             const availabilityResData = await availabilityResponse.json();
+            console.log('Availability API response:', availabilityResData);
 
             if (availabilityResponse.ok) {
-                alert(sessionId ? 'Session updated successfully!' : 'Session created successfully!');
-                // Do NOT reset form if editing
-                // Actually, user might want to create another?
-                // But usually in "Edit" mode, we stay on the page.
-                // "i can edit in it and the same document should egt edit"
-                // So we stay.
-
-                // If it was a NEW creation, do we reset? 
-                // Maybe not, so they can keep refining?
-                // Or reset to allow creating a different type?
-                // Let's NOT reset if we are now in edit mode (which we are).
-
+                toast.success(sessionId ? 'Session updated successfully!' : 'Session created successfully!');
             } else {
-                alert(`Session saved, but failed to update schedule: ${availabilityResData.message}`);
+                console.error('Availability API error:', availabilityResData);
+                toast.warning(`Session saved, but failed to update schedule: ${availabilityResData.message || availabilityResData.error}`);
             }
 
         } catch (error) {
             console.error(error);
-            alert(`Error: ${error.message}`);
+            toast.error(`Error: ${error.message}`);
         } finally {
             setIsSaving(false);
         }
@@ -463,10 +559,6 @@ const VendorSessionManagement = ({ facilityType }) => {
 
     const handleDeleteSession = async () => {
         if (!sessionId || !user) return;
-
-        if (!confirm("Are you sure you want to delete this session? This action cannot be undone.")) {
-            return;
-        }
 
         try {
             setIsSaving(true);
@@ -477,10 +569,10 @@ const VendorSessionManagement = ({ facilityType }) => {
             });
 
             if (res.ok) {
-                alert("Session deleted successfully.");
-                // Reset form
+                toast.success("Session deleted successfully.");
+                // Reset form completely
                 setNewSession({
-                    type: '',
+                    type: '', // Clear type to prevent re-fetch
                     name: '',
                     description: '',
                     duration_minutes: '',
@@ -492,13 +584,14 @@ const VendorSessionManagement = ({ facilityType }) => {
                 });
                 setSchedules({});
                 setSessionId(null);
+                setClearedDays(new Set());
             } else {
                 const data = await res.json();
-                alert(`Failed to delete: ${data.error || data.message}`);
+                toast.error(`Failed to delete: ${data.error || data.message}`);
             }
         } catch (error) {
             console.error("Delete error:", error);
-            alert("An error occurred while deleting.");
+            toast.error("An error occurred while deleting.");
         } finally {
             setIsSaving(false);
         }
@@ -511,7 +604,33 @@ const VendorSessionManagement = ({ facilityType }) => {
         <div className="space-y-6">
             <Card>
                 <CardHeader>
-                    <CardTitle>Add New Facility Session</CardTitle>
+                    <CardTitle className="flex justify-between items-center">
+                        <span>{sessionId ? 'Edit Facility Session' : 'Add New Facility Session'}</span>
+                        {sessionId && (
+                            <div className="flex gap-2">
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button variant="destructive" size="sm" disabled={isSaving}>
+                                            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                                            Delete Session
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                This action cannot be undone. This will permanently delete this session and remove all associated schedules.
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                            <AlertDialogAction onClick={handleDeleteSession} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            </div>
+                        )}
+                    </CardTitle>
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={addSession} className="space-y-6">
@@ -690,11 +809,22 @@ const VendorSessionManagement = ({ facilityType }) => {
                                             {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => {
                                                 const isSelected = selectedDate && selectedDate.getDay() === idx;
                                                 const hasSchedule = schedules[idx] && schedules[idx].length > 0;
+
+                                                let isOpen = true;
+                                                if (businessHours) {
+                                                    const schedule = businessHours.schedules?.find(s => s.day === DAYS_ENUM[idx]);
+                                                    isOpen = schedule ? schedule.is_open : true;
+                                                }
+
                                                 return (
                                                     <button
                                                         key={idx}
                                                         type="button"
                                                         onClick={() => {
+                                                            if (!isOpen) {
+                                                                toast.error("Facility is closed on this day.");
+                                                                return;
+                                                            }
                                                             const today = new Date();
                                                             const currentDay = today.getDay();
                                                             const daysUntil = (idx - currentDay + 7) % 7;
@@ -706,9 +836,13 @@ const VendorSessionManagement = ({ facilityType }) => {
                                                             "w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all",
                                                             isSelected
                                                                 ? "bg-black text-white scale-110 shadow-md"
-                                                                : "bg-gray-100 text-gray-500 hover:bg-gray-200",
-                                                            hasSchedule && !isSelected && "ring-2 ring-black ring-offset-1 text-black bg-gray-100"
+                                                                : (isOpen
+                                                                    ? "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                                                                    : "bg-gray-50 text-gray-300 cursor-not-allowed decoration-red-300 decoration-2"), // Visual cue for closed
+                                                            hasSchedule && !isSelected && "ring-2 ring-black ring-offset-1 text-black bg-gray-100",
+                                                            !isOpen && !isSelected && "bg-red-50 text-red-300" // Explicit closed style
                                                         )}
+                                                        title={!isOpen ? "Closed" : ""}
                                                     >
                                                         {day}
                                                     </button>
@@ -814,6 +948,7 @@ const VendorSessionManagement = ({ facilityType }) => {
                                                                     </span>
                                                                     <span className="text-xs text-gray-500 font-medium">
                                                                         Cap: {slot.capacity} • ₹{slot.price}
+                                                                        {slot.couples_price && <span className="text-purple-600 ml-1">• Couple: ₹{slot.couples_price}</span>}
                                                                     </span>
                                                                 </div>
                                                             </div>
@@ -847,29 +982,48 @@ const VendorSessionManagement = ({ facilityType }) => {
                         </div>
 
 
-                        <div className="flex gap-4">
-                            <Button type="submit" disabled={isSaving} className="flex-1 bg-black hover:bg-gray-800 text-white font-semibold py-6 text-lg mt-8 disabled:bg-gray-400 shadow-lg">
+                        <div className="flex flex-col md:flex-row gap-4 pt-6 mt-8 border-t border-gray-100">
+                            <Button
+                                type="submit"
+                                disabled={isSaving}
+                                className="flex-1 bg-black hover:bg-gray-800 text-white font-semibold py-6 text-lg shadow-lg hover:shadow-xl transition-all disabled:bg-gray-400 disabled:shadow-none"
+                            >
                                 {isSaving ? (
                                     <>
                                         <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                                         Saving...
                                     </>
                                 ) : (
-                                    "Save Session and Schedule"
+                                    <span>{sessionId ? 'Update Session & Schedule' : 'Create Session & Schedule'}</span>
                                 )}
                             </Button>
 
                             {sessionId && (
-                                <Button
-                                    type="button"
-                                    onClick={handleDeleteSession}
-                                    disabled={isSaving}
-                                    variant="destructive"
-                                    className="bg-red-600 hover:bg-red-700 text-white font-semibold py-6 text-lg mt-8 shadow-lg px-8"
-                                >
-                                    <Trash2 className="mr-2 h-5 w-5" />
-                                    Delete Session
-                                </Button>
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            disabled={isSaving}
+                                            variant="destructive"
+                                            className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-semibold py-6 text-lg px-8 shadow-sm hover:shadow-md transition-all"
+                                        >
+                                            <Trash2 className="mr-2 h-5 w-5" />
+                                            Delete Session
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Delete this session?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                This will permanently remove the <strong>{newSession.type}</strong> session and all its scheduled slots. This action cannot be undone.
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                            <AlertDialogAction onClick={handleDeleteSession} className="bg-red-600 hover:bg-red-700">Yes, Delete</AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
                             )}
                         </div>
                     </form>

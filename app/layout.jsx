@@ -3,6 +3,7 @@ import "./globals.css";
 import { twMerge } from "tailwind-merge";
 import { FitnessCentreProvider } from "./context/FitnessCentreContext";
 import { AuthProvider } from "./context/AuthContext";
+import { Toaster } from "@/components/ui/sonner";
 
 // const dmsans= DM_Sans({subsets: ['latin']})
 
@@ -28,6 +29,7 @@ export default function RootLayout({
                 <AuthProvider>
                     <FitnessCentreProvider>
                         {children}
+                        <Toaster />
                     </FitnessCentreProvider>
                 </AuthProvider>
             </body>
