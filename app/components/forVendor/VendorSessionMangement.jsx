@@ -70,6 +70,7 @@ const VendorSessionManagement = ({ facilityType }) => {
 
     // Session State
     const [isSaving, setIsSaving] = useState(false);
+    const [isScheduleDirty, setIsScheduleDirty] = useState(false);
     const [newSession, setNewSession] = useState({
         type: initialTypeValue || '',
         name: '',
@@ -248,37 +249,83 @@ const VendorSessionManagement = ({ facilityType }) => {
         // Resetting start_time to empty might trigger validation or UI issues if TimePicker doesn't handle empty.
         // But original code did this.
         setCurrentSlot({ start_time: '', end_time: '', capacity: '', price: '', couples_price: '' });
+        setIsScheduleDirty(true);
     };
 
-    const handleRemoveSlot = (dayIndex, index) => {
-        console.log('handleRemoveSlot called:', { dayIndex, index });
-
-        if (!schedules[dayIndex]) {
-            console.error('No schedules found for day:', dayIndex);
-            toast.error('Error removing slot');
-            return;
-        }
+    const handleRemoveSlot = async (dayIndex, index) => {
+        if (!schedules[dayIndex]) return;
 
         const updatedSlots = schedules[dayIndex].filter((_, i) => i !== index);
-        if (updatedSlots.length === 0) {
-            const newSchedules = { ...schedules };
-            delete newSchedules[dayIndex];
-            setSchedules(newSchedules);
 
-            // Mark this day as cleared
-            setClearedDays(prev => {
-                const newSet = new Set(prev);
-                newSet.add(dayIndex);
-                return newSet;
-            });
+        // Optimistically update UI
+        let newSchedules = { ...schedules };
+        let newClearedDays = new Set(clearedDays);
+
+        if (updatedSlots.length === 0) {
+            delete newSchedules[dayIndex];
+            newClearedDays.add(dayIndex);
+            setClearedDays(newClearedDays);
         } else {
-            setSchedules({
-                ...schedules,
-                [dayIndex]: updatedSlots
-            });
+            newSchedules[dayIndex] = updatedSlots;
         }
-        console.log('Showing toast for slot removal');
-        toast.info("Slot removed. Please save changes to persist.");
+        setSchedules(newSchedules);
+
+        // Immediate API Call
+        if (sessionId && user) {
+            try {
+                const token = await user.getIdToken();
+                const dayEnum = DAYS_ENUM[dayIndex];
+
+                // Get the representative date for the payload (same logic as save)
+                const getRepresentativeDate = (dIdx) => {
+                    const idx = parseInt(dIdx);
+                    const today = new Date();
+                    const currentDay = today.getDay();
+                    let daysUntil = (idx - currentDay + 7) % 7;
+                    const nextDate = new Date(today);
+                    nextDate.setDate(today.getDate() + daysUntil);
+                    return format(nextDate, 'yyyy-MM-dd');
+                };
+
+                const representativeDate = getRepresentativeDate(dayIndex);
+
+                const availabilityPayload = {
+                    availability: updatedSlots.length > 0 ? updatedSlots.map(slot => ({
+                        day: representativeDate,
+                        start_time: slot.start_time,
+                        end_time: slot.end_time,
+                        capacity: slot.capacity,
+                        price: slot.price,
+                        couple_session_price: slot.couples_price || 0,
+                        session_id: sessionId
+                    })) : [],
+                    removed_days: updatedSlots.length === 0 ? [dayEnum] : [],
+                    session_id: sessionId
+                };
+
+                // If updatedSlots is empty, we must ensure the API knows to clear this day.
+                // The API logic handles removed_days array for this.
+
+                const res = await fetch(`/api/dashboard/availability`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(availabilityPayload),
+                });
+
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.message || 'Failed to delete slot');
+                }
+                toast.success("Slot removed.");
+            } catch (error) {
+                console.error("Error removing slot:", error);
+                toast.error("Failed to remove slot from server. Please refresh.");
+                // Could revert state here if needed
+            }
+        }
     };
 
     const [sessionId, setSessionId] = useState(null); // Track if editing existing session
@@ -393,8 +440,8 @@ const VendorSessionManagement = ({ facilityType }) => {
         }
     }, [newSession.type, fitnessCentreId, fitnessCentreLoading]);
 
-    const addSession = async (e) => {
-        e.preventDefault();
+    const addSession = async (e, mode = 'all') => {
+        if (e && e.preventDefault) e.preventDefault();
 
         const {
             type, name, description, duration_minutes,
@@ -408,7 +455,7 @@ const VendorSessionManagement = ({ facilityType }) => {
             return;
         }
 
-        if (Object.keys(schedules).length === 0) {
+        if (mode !== 'details_only' && Object.keys(schedules).length === 0 && !sessionId) {
             toast.error('Please add at least one schedule slot!');
             return;
         }
@@ -486,6 +533,12 @@ const VendorSessionManagement = ({ facilityType }) => {
 
             if (!sessionId) setSessionId(activeSessionId); // Switch to edit mode after first save
 
+            if (mode === 'details_only') {
+                toast.success(sessionId ? 'Session details updated!' : 'Session created successfully!');
+                setIsSaving(false);
+                return;
+            }
+
             // Step 2: Update Schedule
             const getRepresentativeDate = (dayIndexStr) => {
                 const dayIndex = parseInt(dayIndexStr);
@@ -522,7 +575,8 @@ const VendorSessionManagement = ({ facilityType }) => {
                             'DAY_OF_WEEK_SATURDAY'
                         ];
                         return days[dayIdx];
-                    })
+                    }),
+                session_id: activeSessionId
             };
 
 
@@ -543,7 +597,8 @@ const VendorSessionManagement = ({ facilityType }) => {
             console.log('Availability API response:', availabilityResData);
 
             if (availabilityResponse.ok) {
-                toast.success(sessionId ? 'Session updated successfully!' : 'Session created successfully!');
+                toast.success('Schedule updated successfully!');
+                setIsScheduleDirty(false);
             } else {
                 console.error('Availability API error:', availabilityResData);
                 toast.warning(`Session saved, but failed to update schedule: ${availabilityResData.message || availabilityResData.error}`);
@@ -607,28 +662,13 @@ const VendorSessionManagement = ({ facilityType }) => {
                     <CardTitle className="flex justify-between items-center">
                         <span>{sessionId ? 'Edit Facility Session' : 'Add New Facility Session'}</span>
                         {sessionId && (
-                            <div className="flex gap-2">
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button variant="destructive" size="sm" disabled={isSaving}>
-                                            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
-                                            Delete Session
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                This action cannot be undone. This will permanently delete this session and remove all associated schedules.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                            <AlertDialogAction onClick={handleDeleteSession} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
-                            </div>
+                            <Button
+                                onClick={(e) => addSession(e, 'details_only')}
+                                disabled={isSaving}
+                                className="bg-black text-white hover:bg-gray-800"
+                            >
+                                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Details"}
+                            </Button>
                         )}
                     </CardTitle>
                 </CardHeader>
@@ -952,15 +992,30 @@ const VendorSessionManagement = ({ facilityType }) => {
                                                                     </span>
                                                                 </div>
                                                             </div>
-                                                            <Button
-                                                                type="button"
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                onClick={() => handleRemoveSlot(selectedDayIndex, idx)}
-                                                            >
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </Button>
+                                                            <AlertDialog>
+                                                                <AlertDialogTrigger asChild>
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                    >
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </Button>
+                                                                </AlertDialogTrigger>
+                                                                <AlertDialogContent>
+                                                                    <AlertDialogHeader>
+                                                                        <AlertDialogTitle>Delete this time slot?</AlertDialogTitle>
+                                                                        <AlertDialogDescription>
+                                                                            This will immediately remove the slot <strong>{slot.start_time} - {slot.end_time}</strong>. This action cannot be undone.
+                                                                        </AlertDialogDescription>
+                                                                    </AlertDialogHeader>
+                                                                    <AlertDialogFooter>
+                                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                        <AlertDialogAction onClick={() => handleRemoveSlot(selectedDayIndex, idx)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+                                                                    </AlertDialogFooter>
+                                                                </AlertDialogContent>
+                                                            </AlertDialog>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -982,48 +1037,24 @@ const VendorSessionManagement = ({ facilityType }) => {
                         </div>
 
 
-                        <div className="flex flex-col md:flex-row gap-4 pt-6 mt-8 border-t border-gray-100">
-                            <Button
-                                type="submit"
-                                disabled={isSaving}
-                                className="flex-1 bg-black hover:bg-gray-800 text-white font-semibold py-6 text-lg shadow-lg hover:shadow-xl transition-all disabled:bg-gray-400 disabled:shadow-none"
-                            >
-                                {isSaving ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                                        Saving...
-                                    </>
-                                ) : (
-                                    <span>{sessionId ? 'Update Session & Schedule' : 'Create Session & Schedule'}</span>
-                                )}
-                            </Button>
-
-                            {sessionId && (
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button
-                                            type="button"
-                                            disabled={isSaving}
-                                            variant="destructive"
-                                            className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-semibold py-6 text-lg px-8 shadow-sm hover:shadow-md transition-all"
-                                        >
-                                            <Trash2 className="mr-2 h-5 w-5" />
-                                            Delete Session
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Delete this session?</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                This will permanently remove the <strong>{newSession.type}</strong> session and all its scheduled slots. This action cannot be undone.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                            <AlertDialogAction onClick={handleDeleteSession} className="bg-red-600 hover:bg-red-700">Yes, Delete</AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
+                        <div className="flex flex-col md:flex-row gap-4 pt-6 mt-8 border-t border-gray-100 justify-end">
+                            {/* Update Schedule Button - Only visible when dirty */}
+                            {isScheduleDirty && (
+                                <Button
+                                    type="button"
+                                    onClick={(e) => addSession(e, 'schedule_only')}
+                                    disabled={isSaving}
+                                    className="bg-black hover:bg-gray-800 text-white font-semibold py-6 text-lg shadow-lg hover:shadow-xl transition-all disabled:bg-gray-400 disabled:shadow-none min-w-[200px]"
+                                >
+                                    {isSaving ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        <span>Update Schedule</span>
+                                    )}
+                                </Button>
                             )}
                         </div>
                     </form>

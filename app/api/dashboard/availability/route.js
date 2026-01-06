@@ -35,14 +35,14 @@ export async function POST(request) {
         console.log("Received Availability Payload:", JSON.stringify(body, null, 2));
 
 
-        const { availability, removed_days } = body;
+        const { availability, removed_days, session_id } = body;
 
         console.log('Availability Request - availability:', availability);
         console.log('Availability Request - removed_days:', removed_days);
 
-        // Extract session ID from either availability or we'll need it passed separately
-        let sessionId = null;
-        if (availability && availability.length > 0) {
+        // Extract session ID from body (preferred) or availability
+        let sessionId = session_id;
+        if (!sessionId && availability && availability.length > 0) {
             sessionId = availability[0].session_id;
         }
 
