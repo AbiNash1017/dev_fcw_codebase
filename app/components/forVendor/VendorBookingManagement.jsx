@@ -491,7 +491,7 @@ const VendorBookingManagement = () => {
                                 <div className="border-t border-dashed my-2"></div>
                                 <div className="flex justify-between items-center">
                                     <span className="font-medium text-gray-900">Total Amount</span>
-                                    <span className="font-bold text-lg text-gray-900">₹{selectedBooking.amount_total}</span>
+                                    <span className="font-bold text-lg text-gray-900">₹{Math.round(selectedBooking.amount_total * 0.7)}</span>
                                 </div>
                             </div>
 
