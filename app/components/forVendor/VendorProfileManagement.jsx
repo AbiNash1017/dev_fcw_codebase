@@ -135,15 +135,41 @@ const VendorProfileManagement = () => {
                     pincode: data.fitnessCenter.location?.postal_code || ''
                 });
                 if (data.fitnessCenter.business_hours && data.fitnessCenter.business_hours.schedules && data.fitnessCenter.business_hours.schedules.length > 0) {
+                    // Helper to convert UTC minutes to IST time string (12-hour format)
+                    const convertMinutesToTimeString = (utcMinutes) => {
+                        if (utcMinutes === undefined || utcMinutes === null) return null;
+                        // Add 330 minutes (5:30) to convert UTC to IST
+                        const istMinutes = utcMinutes + 330;
+                        const hours24 = Math.floor(istMinutes / 60) % 24;
+                        const mins = istMinutes % 60;
+                        const period = hours24 >= 12 ? 'PM' : 'AM';
+                        const hours12 = hours24 % 12 || 12;
+                        return `${hours12}:${mins.toString().padStart(2, '0')} ${period}`;
+                    };
+
                     // Normalize schedules to ensure time_slots use start_time_utc/end_time_utc and filter out null entries
                     const normalizedSchedules = data.fitnessCenter.business_hours.schedules.map(schedule => ({
                         ...schedule,
                         time_slots: (schedule.time_slots || [])
                             .filter(slot => slot !== null && slot !== undefined)
-                            .map(slot => ({
-                                start_time_utc: slot.start_time_utc || slot.start_time || '06:00',
-                                end_time_utc: slot.end_time_utc || slot.end_time || '22:00'
-                            }))
+                            .map(slot => {
+                                // Check if data is in new minute format or old string format
+                                let startTime = slot.start_time_utc || slot.start_time || '06:00';
+                                let endTime = slot.end_time_utc || slot.end_time || '22:00';
+
+                                // If we have the new minute-based fields, convert them
+                                if (typeof slot.start_time_minutes_utc === 'number') {
+                                    startTime = convertMinutesToTimeString(slot.start_time_minutes_utc) || '06:00';
+                                }
+                                if (typeof slot.end_time_minutes_utc === 'number') {
+                                    endTime = convertMinutesToTimeString(slot.end_time_minutes_utc) || '22:00';
+                                }
+
+                                return {
+                                    start_time_utc: startTime,
+                                    end_time_utc: endTime
+                                };
+                            })
                     }));
                     // Ensure each schedule has at least one time slot
                     normalizedSchedules.forEach(schedule => {

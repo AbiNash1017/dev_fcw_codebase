@@ -88,9 +88,16 @@ export async function PATCH(request) {
                     ...sch,
                     time_slots: sch.time_slots ? sch.time_slots.filter(slot => slot !== null).map(slot => {
                         console.log("Processing slot:", slot);
+                        const startMinutes = convertTimeToMinutes(slot.start_time_utc || slot.start_time);
+                        const endMinutes = convertTimeToMinutes(slot.end_time_utc || slot.end_time);
+
+                        // Convert to UTC (IST - 5:30)
+                        const startMinutesUtc = startMinutes - 330;
+                        const endMinutesUtc = endMinutes - 330;
+
                         return {
-                            start_time_minutes: convertTimeToMinutes(slot.start_time_utc || slot.start_time),
-                            end_time_minutes: convertTimeToMinutes(slot.end_time_utc || slot.end_time),
+                            start_time_minutes_utc: startMinutesUtc,
+                            end_time_minutes_utc: endMinutesUtc,
                         };
                     }) : []
                 }));
