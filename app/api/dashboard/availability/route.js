@@ -112,10 +112,15 @@ export async function POST(request) {
 
             console.log(`Converted to minutes - start: ${startMinutes}, end: ${endMinutes}`);
 
+            // Convert to UTC (IST - 5:30)
+            // 5 hours 30 minutes = 330 minutes
+            const startMinutesUtc = startMinutes - 330;
+            const endMinutesUtc = endMinutes - 330;
+
             // Use integer price logic from previous steps
             scheduleMap[dayEnum].push({
-                start_time_minutes: startMinutes,
-                end_time_minutes: endMinutes,
+                start_time_minutes_utc: startMinutesUtc,
+                end_time_minutes_utc: endMinutesUtc,
                 capacity: slot.capacity || facility.capacity,
                 price: slot.price ? Math.round(slot.price * 1.3) : 0,
                 couple_session_price: slot.couple_session_price ? Math.round(slot.couple_session_price * 1.3) : 0,
