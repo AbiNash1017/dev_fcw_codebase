@@ -28,6 +28,10 @@ const VendorSidebar = ({ tabs, activeTab, setActiveTab, availableFacilities = []
 
     // Helper function to get display label from facility value
     const getFacilityLabel = (facilityValue) => {
+        // Ensure we have a string value
+        if (!facilityValue || typeof facilityValue !== 'string') {
+            return facilityValue || ''
+        }
         // Check if it's the new format (FACILITY_TYPE_XXX)
         if (facilityValue.startsWith('FACILITY_TYPE_')) {
             return facilityValue.replace('FACILITY_TYPE_', '').replace(/_/g, ' ')
