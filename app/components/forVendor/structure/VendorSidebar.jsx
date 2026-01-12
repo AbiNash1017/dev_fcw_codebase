@@ -10,15 +10,31 @@ const VendorSidebar = ({ tabs, activeTab, setActiveTab, availableFacilities = []
     const [isCollapsed, setIsCollapsed] = useState(false)
     const [isModalOpen, setIsModalOpen] = useState(false)
 
-    const predefinedFacilities = ['GYM', 'YOGA', 'ZUMBA', 'PERSONAL TRAINING', 'SWIMMING'] // Updated list
+    const predefinedFacilities = [
+        { label: 'GYM', value: 'FACILITY_TYPE_GYM' },
+        { label: 'YOGA', value: 'FACILITY_TYPE_YOGA' },
+        { label: 'ZUMBA', value: 'FACILITY_TYPE_ZUMBA' },
+        { label: 'PERSONAL TRAINING', value: 'FACILITY_TYPE_PERSONAL_TRAINING' },
+        { label: 'SWIMMING', value: 'FACILITY_TYPE_SWIMMING' }
+    ]
 
-    const handleAddFacilityClick = (facility) => {
-        onAddFacility(facility)
+    const handleAddFacilityClick = (facilityValue) => {
+        onAddFacility(facilityValue)
         setIsModalOpen(false)
     }
 
     // Filter out facilities that are already added
-    const availableOptions = predefinedFacilities.filter(f => !availableFacilities.includes(f))
+    const availableOptions = predefinedFacilities.filter(f => !availableFacilities.includes(f.value))
+
+    // Helper function to get display label from facility value
+    const getFacilityLabel = (facilityValue) => {
+        // Check if it's the new format (FACILITY_TYPE_XXX)
+        if (facilityValue.startsWith('FACILITY_TYPE_')) {
+            return facilityValue.replace('FACILITY_TYPE_', '').replace(/_/g, ' ')
+        }
+        // Old format - just return as is
+        return facilityValue
+    }
 
     return (
         <>
@@ -96,7 +112,7 @@ const VendorSidebar = ({ tabs, activeTab, setActiveTab, availableFacilities = []
                                 {/* Using a generic dumbbell/activity icon for all, or specific if mapped */}
                                 <span className={`h-2 w-2 rounded-full bg-blue-500 ${isCollapsed ? 'mr-0' : 'mr-3'}`}></span>
                                 <span className={`transition-all duration-300 ease-in-out ${isCollapsed ? 'w-0 opacity-0 absolute' : 'w-auto opacity-100'} overflow-hidden whitespace-nowrap capitalize`}>
-                                    {facility.toLowerCase()}
+                                    {getFacilityLabel(facility).toLowerCase()}
                                 </span>
                             </Button>
                             {!isCollapsed && (
@@ -145,12 +161,12 @@ const VendorSidebar = ({ tabs, activeTab, setActiveTab, availableFacilities = []
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                     {availableOptions.map((facility) => (
                                         <button
-                                            key={facility}
-                                            onClick={() => handleAddFacilityClick(facility)}
+                                            key={facility.value}
+                                            onClick={() => handleAddFacilityClick(facility.value)}
                                             className="flex flex-col items-center justify-center p-6 border-2 border-gray-200 dark:border-gray-700 rounded-xl hover:border-black dark:hover:border-white hover:bg-gray-50 dark:hover:bg-gray-800 transition-all group"
                                         >
                                             <span className="text-sm font-semibold text-gray-600 dark:text-gray-300 group-hover:text-black dark:group-hover:text-white">
-                                                {facility}
+                                                {facility.label}
                                             </span>
                                         </button>
                                     ))}

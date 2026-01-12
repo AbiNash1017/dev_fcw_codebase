@@ -65,7 +65,9 @@ const VendorSessionManagement = ({ facilityType }) => {
 
     // Determine initial type from prop
     const initialTypeValue = facilityType
-        ? facilityTypes.find(t => t.label === facilityType.toUpperCase())?.value
+        ? (facilityType.startsWith('FACILITY_TYPE_')
+            ? facilityType  // Already in correct format
+            : facilityTypes.find(t => t.label === facilityType.toUpperCase())?.value)
         : '';
 
     // Session State
@@ -86,7 +88,9 @@ const VendorSessionManagement = ({ facilityType }) => {
     // Update if prop changes (e.g. switching tabs)
     useEffect(() => {
         if (facilityType) {
-            const mappedValue = facilityTypes.find(t => t.label === facilityType.toUpperCase())?.value;
+            const mappedValue = facilityType.startsWith('FACILITY_TYPE_')
+                ? facilityType  // Already in correct format
+                : facilityTypes.find(t => t.label === facilityType.toUpperCase())?.value;
             if (mappedValue) {
                 setNewSession(prev => ({ ...prev, type: mappedValue }));
             }

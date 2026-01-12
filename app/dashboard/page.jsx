@@ -34,6 +34,16 @@ const VendorDashboard = () => {
         { id: 'contact_us', label: 'Contact Admin', icon: LucidePhoneCall },
     ]
 
+    // Helper function to get display label from facility value
+    const getFacilityLabel = (facilityValue) => {
+        // Check if it's the new format (FACILITY_TYPE_XXX)
+        if (facilityValue.startsWith('FACILITY_TYPE_')) {
+            return facilityValue.replace('FACILITY_TYPE_', '').replace(/_/g, ' ')
+        }
+        // Old format - just return as is
+        return facilityValue
+    }
+
     const fetchFacilities = async () => {
         if (!user) return;
         try {
@@ -190,7 +200,7 @@ const VendorDashboard = () => {
                             {availableFacilities.map(facility => (
                                 <TabsContent key={facility} value={`facility_${facility}`}>
                                     <div className="space-y-4">
-                                        <h2 className="text-2xl font-bold capitalize">{facility.toLowerCase()} Management</h2>
+                                        <h2 className="text-2xl font-bold capitalize">{getFacilityLabel(facility).toLowerCase()} Management</h2>
                                         {/* Reuse Session Management Component, passing the type/facility */}
                                         {/* Ideally VendorSessionManagement should accept a prop for filter or setup */}
                                         <VendorSessionManagement facilityType={facility} />
