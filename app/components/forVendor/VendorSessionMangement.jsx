@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Calendar } from "@/components/ui/calendar"
 import TimePickerWheel from "@/components/ui/time-picker-wheel"
-import { cn, convertTimeToMinutes, convertMinutesToTime } from "@/lib/utils"
+import { cn, convertTimeToMinutes, convertMinutesToTime, convertISTToUTCMinutes, convertUTCMinutesToISTMinutes } from "@/lib/utils"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -202,13 +202,13 @@ const VendorSessionManagement = ({ facilityType }) => {
                     // Skip null/undefined slots
                     if (!slot) return false;
 
-                    // Support new schema (utc minutes) - add 330 to convert UTC to IST
+                    // Support new schema (utc minutes) - use helper to convert UTC to IST
                     // Also support old schema (non-utc minutes or string)
                     let slotStart, slotEnd;
 
                     if (slot.start_time_minutes_utc !== undefined && slot.start_time_minutes_utc !== null) {
-                        // Convert UTC to IST by adding 330 minutes
-                        slotStart = slot.start_time_minutes_utc + 330;
+                        // Convert UTC to IST
+                        slotStart = convertUTCMinutesToISTMinutes(slot.start_time_minutes_utc);
                     } else if (slot.start_time_minutes !== undefined && slot.start_time_minutes !== null) {
                         slotStart = slot.start_time_minutes;
                     } else {
@@ -216,8 +216,8 @@ const VendorSessionManagement = ({ facilityType }) => {
                     }
 
                     if (slot.end_time_minutes_utc !== undefined && slot.end_time_minutes_utc !== null) {
-                        // Convert UTC to IST by adding 330 minutes
-                        slotEnd = slot.end_time_minutes_utc + 330;
+                        // Convert UTC to IST
+                        slotEnd = convertUTCMinutesToISTMinutes(slot.end_time_minutes_utc);
                     } else if (slot.end_time_minutes !== undefined && slot.end_time_minutes !== null) {
                         slotEnd = slot.end_time_minutes;
                     } else {
@@ -236,7 +236,7 @@ const VendorSessionManagement = ({ facilityType }) => {
                             let start, end;
 
                             if (s.start_time_minutes_utc !== undefined && s.start_time_minutes_utc !== null) {
-                                start = convertMinutesToTime(s.start_time_minutes_utc + 330);
+                                start = convertMinutesToTime(convertUTCMinutesToISTMinutes(s.start_time_minutes_utc));
                             } else if (s.start_time_minutes !== undefined && s.start_time_minutes !== null) {
                                 start = convertMinutesToTime(s.start_time_minutes);
                             } else {
@@ -244,7 +244,7 @@ const VendorSessionManagement = ({ facilityType }) => {
                             }
 
                             if (s.end_time_minutes_utc !== undefined && s.end_time_minutes_utc !== null) {
-                                end = convertMinutesToTime(s.end_time_minutes_utc + 330);
+                                end = convertMinutesToTime(convertUTCMinutesToISTMinutes(s.end_time_minutes_utc));
                             } else if (s.end_time_minutes !== undefined && s.end_time_minutes !== null) {
                                 end = convertMinutesToTime(s.end_time_minutes);
                             } else {
@@ -409,8 +409,8 @@ const VendorSessionManagement = ({ facilityType }) => {
                                     // Handle start_time - prefer UTC minutes format
                                     let startTime = '';
                                     if (slot.start_time_minutes_utc !== undefined && slot.start_time_minutes_utc !== null) {
-                                        // Convert UTC to IST by adding 330 minutes
-                                        startTime = convertMinutesToTime(slot.start_time_minutes_utc + 330);
+                                        // Convert UTC to IST
+                                        startTime = convertMinutesToTime(convertUTCMinutesToISTMinutes(slot.start_time_minutes_utc));
                                     } else if (slot.start_time_minutes !== undefined && slot.start_time_minutes !== null) {
                                         startTime = convertMinutesToTime(slot.start_time_minutes);
                                     } else if (slot.start_time_utc || slot.start_time) {
@@ -420,8 +420,8 @@ const VendorSessionManagement = ({ facilityType }) => {
                                     // Handle end_time - prefer UTC minutes format
                                     let endTime = '';
                                     if (slot.end_time_minutes_utc !== undefined && slot.end_time_minutes_utc !== null) {
-                                        // Convert UTC to IST by adding 330 minutes
-                                        endTime = convertMinutesToTime(slot.end_time_minutes_utc + 330);
+                                        // Convert UTC to IST
+                                        endTime = convertMinutesToTime(convertUTCMinutesToISTMinutes(slot.end_time_minutes_utc));
                                     } else if (slot.end_time_minutes !== undefined && slot.end_time_minutes !== null) {
                                         endTime = convertMinutesToTime(slot.end_time_minutes);
                                     } else if (slot.end_time_utc || slot.end_time) {

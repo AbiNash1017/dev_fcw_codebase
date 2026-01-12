@@ -57,9 +57,7 @@ export async function GET(request) {
         const isMetadataComplete = !!(
             userMetadata.first_name &&
             userMetadata.last_name &&
-            userMetadata.gender &&
-            userMetadata.city &&
-            userMetadata.state
+            userMetadata.gender
         );
 
         if (!isMetadataComplete) {

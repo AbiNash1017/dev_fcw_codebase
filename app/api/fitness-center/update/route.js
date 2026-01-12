@@ -3,7 +3,7 @@ import { adminAuth } from '@/lib/firebaseAdmin';
 import dbConnect from '@/lib/db';
 import FitnessCenter from '@/lib/models/fitnessCenters';
 import CenterAdminMetadata from '@/lib/models/CenterAdminMetadata';
-import { convertTimeToMinutes } from '@/lib/utils';
+import { convertTimeToMinutes, convertISTToUTCMinutes } from '@/lib/utils';
 
 export async function PATCH(request) {
     const authHeader = request.headers.get('Authorization');
@@ -92,8 +92,8 @@ export async function PATCH(request) {
                         const endMinutes = convertTimeToMinutes(slot.end_time_utc || slot.end_time);
 
                         // Convert to UTC (IST - 5:30)
-                        const startMinutesUtc = startMinutes - 330;
-                        const endMinutesUtc = endMinutes - 330;
+                        const startMinutesUtc = convertISTToUTCMinutes(startMinutes);
+                        const endMinutesUtc = convertISTToUTCMinutes(endMinutes);
 
                         return {
                             start_time_minutes_utc: startMinutesUtc,

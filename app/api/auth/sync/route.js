@@ -18,14 +18,14 @@ export async function POST(req) {
             user = await CenterAdminMetadata.create({
                 uid,
                 username,
-                admin_phone_number: phoneNumber,
+                phone_number: phoneNumber,
             });
         } else {
             // Update existing user if needed
             let isUpdated = false;
-            // Note: Schema uses admin_phone_number
-            if (user.admin_phone_number !== phoneNumber) {
-                user.admin_phone_number = phoneNumber;
+            // Note: Schema uses phone_number
+            if (user.phone_number !== phoneNumber) {
+                user.phone_number = phoneNumber;
                 isUpdated = true;
             }
             if (!user.username) {

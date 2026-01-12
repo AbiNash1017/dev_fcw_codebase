@@ -64,7 +64,7 @@ const VendorContactUs = () => {
                     <CardContent>
                         <div className="text-2xl font-bold mt-1">
                             <a href="mailto:contact@example.com" className="hover:text-primary">
-                                info@fitchoiceworld.com
+                                support@fitchoiceworld.com
                             </a>
                         </div>
                         <p className="text-sm text-muted-foreground mt-2">

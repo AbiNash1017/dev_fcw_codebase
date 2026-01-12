@@ -12,6 +12,7 @@ import { storage } from '@/firebaseConfig';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
 import { useFitnessCentre } from '@/app/context/FitnessCentreContext';
+import { convertUTCMinutesToISTMinutes } from '@/lib/utils';
 import TimePickerInput from "@/components/ui/time-picker-input";
 const DAYS_MAPPING = {
     'DAY_OF_WEEK_MONDAY': 'Monday',
@@ -102,8 +103,8 @@ const VendorProfileManagement = () => {
                 setUserProfile({
                     first_name: data.userProfile.first_name || '',
                     last_name: data.userProfile.last_name || '',
-                    email: data.userProfile.admin_email || user.email || '',
-                    phone_number: data.userProfile.admin_phone_number || '',
+                    email: data.userProfile.email || user.email || '',
+                    phone_number: data.userProfile.phone_number || '',
                     bio: data.userProfile.bio || '',
                     profile_image_url: data.userProfile.profile_image_url || '',
                     user_since: data.userProfile.created_at || '',
@@ -138,8 +139,8 @@ const VendorProfileManagement = () => {
                     // Helper to convert UTC minutes to IST time string (12-hour format)
                     const convertMinutesToTimeString = (utcMinutes) => {
                         if (utcMinutes === undefined || utcMinutes === null) return null;
-                        // Add 330 minutes (5:30) to convert UTC to IST
-                        const istMinutes = utcMinutes + 330;
+                        // Use helper to convert correctly handling negative wrap-around
+                        const istMinutes = convertUTCMinutesToISTMinutes(utcMinutes);
                         const hours24 = Math.floor(istMinutes / 60) % 24;
                         const mins = istMinutes % 60;
                         const period = hours24 >= 12 ? 'PM' : 'AM';

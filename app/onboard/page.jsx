@@ -233,7 +233,7 @@ export default function Onboard() {
                                 required
                                 className="bg-gray-50 border-gray-200 text-black placeholder:text-gray-400 focus:border-black transition-colors py-6 rounded-xl"
                             />
-                            <Input
+                            {/* <Input
                                 type="text"
                                 placeholder="City"
                                 value={city}
@@ -248,7 +248,7 @@ export default function Onboard() {
                                 onChange={(e) => setState(e.target.value)}
                                 required
                                 className="bg-gray-50 border-gray-200 text-black placeholder:text-gray-400 focus:border-black transition-colors py-6 rounded-xl"
-                            />
+                            /> */}
 
                             {error && <p className="text-red-500 text-sm font-medium">{error}</p>}
                             <div>

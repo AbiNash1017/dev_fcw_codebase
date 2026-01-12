@@ -41,7 +41,8 @@ export async function POST(request) {
                 country: 'India', // Defaulting to India as per context
             },
             map_url: body.map_url,
-            phone_number: body.contact_no,
+            phone_number: body.phone_number,
+            email: body.email,
             subscription_plan_id: body.plan_id,
             is_active: true,
         });
@@ -53,6 +54,7 @@ export async function POST(request) {
             { uid: uid },
             {
                 fitness_center_id: newFitnessCenter._id,
+                email: body.email,
                 onboarding_completed: true,
                 latitude: latitude,
                 longitude: longitude,

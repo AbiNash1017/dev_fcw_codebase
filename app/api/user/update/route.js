@@ -111,10 +111,10 @@ export async function PATCH(request) {
 
         // Only update fields that are provided
         // Mapping similar fields to CenterAdminMetadata
-        if (body.email !== undefined) updateData.admin_email = body.email;
+        if (body.email !== undefined) updateData.email = body.email;
         if (body.first_name !== undefined) updateData.first_name = body.first_name;
         if (body.last_name !== undefined) updateData.last_name = body.last_name;
-        if (body.phone_number !== undefined) updateData.admin_phone_number = body.phone_number;
+        if (body.phone_number !== undefined) updateData.phone_number = body.phone_number;
         if (body.profile_image_url !== undefined) updateData.profile_image_url = body.profile_image_url;
 
 
@@ -135,7 +135,7 @@ export async function PATCH(request) {
 
         console.log('Vendor profile after update:', {
             uid: updatedMetadata.uid,
-            email: updatedMetadata.admin_email,
+            email: updatedMetadata.email,
             first_name: updatedMetadata.first_name
         });
 

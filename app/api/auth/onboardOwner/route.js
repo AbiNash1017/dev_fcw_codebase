@@ -53,12 +53,12 @@ export async function POST(request) {
                 first_name: first_name,
                 last_name: last_name,
                 gender: gender,
-                state: state,
-                city: city,
-                address: address,
-                latitude: latitude,
-                longitude: longitude,
-                admin_phone_number: mobile_no,
+                // state: state,
+                // city: city,
+                // address: address,
+                // latitude: latitude,
+                // longitude: longitude,
+                phone_number: mobile_no,
                 // admin_email: updatedUser.email || null, // We might need to fetch email from auth or existing user record if needed
                 // onboarding_completed: true, // Defer setting this until fitness center is created
                 updated_at: new Date(),

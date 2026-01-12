@@ -3,7 +3,7 @@ import { adminAuth } from '@/lib/firebaseAdmin';
 import dbConnect from '@/lib/db';
 import Facility from '@/lib/models/facilities';
 import CenterAdminMetadata from '@/lib/models/CenterAdminMetadata';
-import { convertTimeToMinutes } from '@/lib/utils';
+import { convertTimeToMinutes, convertISTToUTCMinutes } from '@/lib/utils';
 
 const DAY_MAPPING = [
     'DAY_OF_WEEK_SUNDAY',
@@ -113,9 +113,9 @@ export async function POST(request) {
             console.log(`Converted to minutes - start: ${startMinutes}, end: ${endMinutes}`);
 
             // Convert to UTC (IST - 5:30)
-            // 5 hours 30 minutes = 330 minutes
-            const startMinutesUtc = startMinutes - 330;
-            const endMinutesUtc = endMinutes - 330;
+            // Use helper to handle negative wrap-around
+            const startMinutesUtc = convertISTToUTCMinutes(startMinutes);
+            const endMinutesUtc = convertISTToUTCMinutes(endMinutes);
 
             // Use integer price logic from previous steps
             scheduleMap[dayEnum].push({

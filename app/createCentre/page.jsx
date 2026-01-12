@@ -269,6 +269,7 @@ const statesCities = {
 export default function CreateCentre() {
     const [centreName, setCentreName] = useState("");
     const [contact_no, setContact_no] = useState("");
+    const [email, setEmail] = useState("");
     const [centreDescription, setCentreDescription] = useState("");
     const [address, setAddress] = useState("");
     const [city, setCity] = useState("Bengaluru");
@@ -289,6 +290,8 @@ export default function CreateCentre() {
     useEffect(() => {
         if (!loading && !user) {
             router.push('/login')
+        } else if (user && user.email) {
+            setEmail(user.email);
         }
 
         // Check if user has completed onboarding and already has a fitness center
@@ -393,6 +396,7 @@ export default function CreateCentre() {
                 pincode,
                 pincode,
                 contact_no: `+91${contact_no}`,
+                email,
                 map_url: mapUrl
             };
 
@@ -464,6 +468,16 @@ export default function CreateCentre() {
                                 className="bg-gray-50 border-gray-200 text-black placeholder:text-gray-400 focus:border-black transition-colors py-6 rounded-xl"
                             />
                             <div className="space-y-2">
+                                <Input
+                                    type="email"
+                                    placeholder="Email Address"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    required
+                                    className="bg-gray-50 border-gray-200 text-black placeholder:text-gray-400 focus:border-black transition-colors py-6 rounded-xl"
+                                />
+                            </div>
+                            <div className="space-y-2">
                                 <Textarea
                                     id="description"
                                     placeholder="Fitness Centre Description"
@@ -518,6 +532,7 @@ export default function CreateCentre() {
                                 required
                                 className="bg-gray-50 border-gray-200 text-black placeholder:text-gray-400 focus:border-black transition-colors py-6 rounded-xl"
                             />
+
                             <div className="flex gap-2">
                                 <div className="flex items-center justify-center bg-gray-50 border border-gray-200 text-black px-4 rounded-xl font-medium min-w-[60px]">
                                     +91

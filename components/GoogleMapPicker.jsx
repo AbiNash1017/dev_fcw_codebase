@@ -36,10 +36,10 @@ export default function GoogleMapPicker({ onLocationSelect, initialLocation }) {
 
     const [map, setMap] = useState(null);
     const [selectedLocation, setSelectedLocation] = useState(initialLocation || defaultCenter);
-    const [searchResult, setSearchResult] = useState(null);
     const [isPinning, setIsPinning] = useState(false);
     const [mapType, setMapType] = useState('roadmap');
     const searchInputRef = useRef(null);
+    const autocompleteRef = useRef(null);
 
     useEffect(() => {
         if (initialLocation && initialLocation.lat && initialLocation.lng) {
@@ -117,12 +117,18 @@ export default function GoogleMapPicker({ onLocationSelect, initialLocation }) {
     };
 
     const onLoadAutocomplete = (autocomplete) => {
-        setSearchResult(autocomplete);
+        autocompleteRef.current = autocomplete;
     };
 
     const onPlaceChanged = () => {
-        if (searchResult !== null) {
-            const place = searchResult.getPlace();
+        if (autocompleteRef.current !== null) {
+            const place = autocompleteRef.current.getPlace();
+
+            if (!place) {
+                console.warn("GoogleMapPicker: Place not found");
+                return;
+            }
+
             if (place.geometry && place.geometry.location) {
                 const pos = {
                     lat: place.geometry.location.lat(),
@@ -132,6 +138,8 @@ export default function GoogleMapPicker({ onLocationSelect, initialLocation }) {
                 onLocationSelect(pos);
                 map?.panTo(pos);
                 map?.setZoom(16);
+            } else {
+                console.log("GoogleMapPicker: No details available for input: '" + place.name + "'");
             }
         }
     };
@@ -180,27 +188,23 @@ export default function GoogleMapPicker({ onLocationSelect, initialLocation }) {
                 <style dangerouslySetInnerHTML={{ __html: styles }} />
 
                 {/* Floating Search Bar */}
-                <div
-                    className="absolute top-4 left-4 right-16 z-10 max-w-md"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    <Autocomplete
-                        onLoad={onLoadAutocomplete}
-                        onPlaceChanged={onPlaceChanged}
-                    >
-                        <div className="relative group/search">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Search className="h-4 w-4 text-gray-400 group-focus-within/search:text-black transition-colors" />
-                            </div>
+                <div className="absolute top-4 left-4 right-16 z-10 max-w-md">
+                    <div className="relative group/search">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Search className="h-4 w-4 text-gray-400 group-focus-within/search:text-black transition-colors" />
+                        </div>
+                        <Autocomplete
+                            onLoad={onLoadAutocomplete}
+                            onPlaceChanged={onPlaceChanged}
+                        >
                             <input
                                 ref={searchInputRef}
                                 type="text"
                                 placeholder="Search places..."
                                 className="block w-full pl-10 pr-3 py-3 text-sm bg-white/95 backdrop-blur-sm border-0 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] text-gray-900 placeholder:text-gray-400 focus:ring-0 focus:outline-none transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.16)]"
                             />
-                        </div>
-                    </Autocomplete>
+                        </Autocomplete>
+                    </div>
                 </div>
 
                 <GoogleMap
