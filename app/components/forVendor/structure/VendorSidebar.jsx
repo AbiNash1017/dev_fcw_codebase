@@ -32,9 +32,9 @@ const VendorSidebar = ({ tabs, activeTab, setActiveTab, availableFacilities = []
         if (!facilityValue || typeof facilityValue !== 'string') {
             return facilityValue || ''
         }
-        // Check if it's the new format (FACILITY_TYPE_XXX)
-        if (facilityValue.startsWith('FACILITY_TYPE_')) {
-            return facilityValue.replace('FACILITY_TYPE_', '').replace(/_/g, ' ')
+        // Check if it's the new format (FACILITY_TYPE_XXX) - Case insensitive check
+        if (facilityValue.toUpperCase().startsWith('FACILITY_TYPE_')) {
+            return facilityValue.replace(/^FACILITY_TYPE_/i, '').replace(/_/g, ' ')
         }
         // Old format - just return as is
         return facilityValue

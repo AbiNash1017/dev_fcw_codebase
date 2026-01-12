@@ -65,8 +65,8 @@ const VendorSessionManagement = ({ facilityType }) => {
 
     // Determine initial type from prop
     const initialTypeValue = facilityType
-        ? (facilityType.startsWith('FACILITY_TYPE_')
-            ? facilityType  // Already in correct format
+        ? (facilityType.toUpperCase().startsWith('FACILITY_TYPE_')
+            ? facilityType  // Already in correct format (return original value to preserve casing from DB/URL if needed, though usually we want to standardize)
             : facilityTypes.find(t => t.label === facilityType.toUpperCase())?.value)
         : '';
 
@@ -88,7 +88,7 @@ const VendorSessionManagement = ({ facilityType }) => {
     // Update if prop changes (e.g. switching tabs)
     useEffect(() => {
         if (facilityType) {
-            const mappedValue = facilityType.startsWith('FACILITY_TYPE_')
+            const mappedValue = facilityType.toUpperCase().startsWith('FACILITY_TYPE_')
                 ? facilityType  // Already in correct format
                 : facilityTypes.find(t => t.label === facilityType.toUpperCase())?.value;
             if (mappedValue) {
