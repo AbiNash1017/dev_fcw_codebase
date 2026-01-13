@@ -13,7 +13,9 @@ import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
 import { useFitnessCentre } from '@/app/context/FitnessCentreContext';
 import { convertUTCMinutesToISTMinutes } from '@/lib/utils';
+
 import TimePickerInput from "@/components/ui/time-picker-input";
+import { compressImage } from '@/lib/imageCompression';
 const DAYS_MAPPING = {
     'DAY_OF_WEEK_MONDAY': 'Monday',
     'DAY_OF_WEEK_TUESDAY': 'Tuesday',
@@ -123,7 +125,7 @@ const VendorProfileManagement = () => {
                     rating: data.fitnessCenter.rating || 0,
                     header_image: data.fitnessCenter.image_urls?.[0] || '',
                     owner_id: data.fitnessCenter.owner_id || '',
-                    centre_images: data.fitnessCenter.image_urls || [],
+                    centre_images: data.fitnessCenter.image_urls?.slice(1) || [],
                     google_maps_link: data.fitnessCenter.map_url || '',
                     contact_no: data.fitnessCenter.phone_number || '',
                     amenities: data.fitnessCenter.amenities || []
@@ -212,21 +214,47 @@ const VendorProfileManagement = () => {
         setLocation((prev) => ({ ...prev, [name]: value }));
     };
 
-    const handleHeaderImageSelection = (e) => {
+    const handleHeaderImageSelection = async (e) => {
         const file = e.target.files ? e.target.files[0] : null;
         if (file) {
-            setPendingHeaderImage(file);
+            if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
+                alert('Only JPG, JPEG, and PNG formats are allowed.');
+                return;
+            }
+            try {
+                const compressedFile = await compressImage(file);
+                setPendingHeaderImage(compressedFile);
+            } catch (error) {
+                console.error("Compression error", error);
+                alert("Failed to process image");
+            }
         }
     };
 
-    const handleFitnessImagesSelection = (e) => {
+    const handleFitnessImagesSelection = async (e) => {
         if (e.target.files) {
             const files = Array.from(e.target.files);
-            if (files.length + gymDetails.centre_images.length > 5) {
+
+            // Filter invalid types
+            const validFiles = files.filter(file =>
+                ['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)
+            );
+
+            if (validFiles.length !== files.length) {
+                alert('Only JPG, JPEG, and PNG formats are allowed.');
+            }
+
+            if (validFiles.length + gymDetails.centre_images.length > 5) {
                 alert('You can only upload up to 5 fitness center images.');
                 return;
             }
-            setPendingFitnessImages((prev) => [...prev, ...files]);
+
+            // Compress files
+            const compressedFiles = await Promise.all(
+                validFiles.map(file => compressImage(file))
+            );
+
+            setPendingFitnessImages((prev) => [...prev, ...compressedFiles]);
         }
     };
 
@@ -249,10 +277,20 @@ const VendorProfileManagement = () => {
         }
     };
 
-    const handleProfileImageSelection = (e) => {
+    const handleProfileImageSelection = async (e) => {
         const file = e.target.files ? e.target.files[0] : null;
         if (file) {
-            setPendingProfileImage(file);
+            if (!['image/jpeg', 'image/png', 'image/jpg'].includes(file.type)) {
+                alert('Only JPG, JPEG, and PNG formats are allowed.');
+                return;
+            }
+            try {
+                const compressedFile = await compressImage(file);
+                setPendingProfileImage(compressedFile);
+            } catch (error) {
+                console.error("Compression error", error);
+                alert("Failed to process image");
+            }
         }
     };
 
@@ -293,6 +331,7 @@ const VendorProfileManagement = () => {
                 pincode: location.pincode,
                 header_image: pendingHeaderImage ? uploadedHeaderImage : gymDetails.header_image,
                 centre_images: [
+                    (pendingHeaderImage ? uploadedHeaderImage : gymDetails.header_image), // Ensure header is first
                     ...gymDetails.centre_images,
                     ...uploadedFitnessCentreImages.filter((img) => img !== null)
                 ],

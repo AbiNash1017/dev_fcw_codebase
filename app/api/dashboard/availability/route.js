@@ -122,8 +122,8 @@ export async function POST(request) {
                 start_time_minutes_utc: startMinutesUtc,
                 end_time_minutes_utc: endMinutesUtc,
                 capacity: slot.capacity || facility.capacity,
-                price: slot.price ? Math.round(slot.price * 1.3) : 0,
-                couple_session_price: slot.couple_session_price ? Math.round(slot.couple_session_price * 1.3) : 0,
+                price: slot.price ? Math.round(slot.price) : 0,
+                couple_session_price: slot.couple_session_price ? Math.round(slot.couple_session_price) : 0,
                 instructor_id: facility.instructor_id,
                 instructor_name: facility.instructor_name
             });

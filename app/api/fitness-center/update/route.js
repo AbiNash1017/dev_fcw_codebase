@@ -47,6 +47,13 @@ export async function PATCH(request) {
             fitnessCenter.location.postal_code = body.pincode;
         }
 
+
+
+        if (body.centre_images && Array.isArray(body.centre_images)) {
+            // Replace all images with the new list
+            fitnessCenter.image_urls = body.centre_images;
+        }
+
         // Update images with proper array handling
         if (body.header_image !== undefined) {
             // If header_image is provided, set it as the first image
@@ -57,11 +64,6 @@ export async function PATCH(request) {
                     fitnessCenter.image_urls = [body.header_image];
                 }
             }
-        }
-
-        if (body.centre_images && Array.isArray(body.centre_images)) {
-            // Replace all images with the new list
-            fitnessCenter.image_urls = body.centre_images;
         }
 
         // Update amenities

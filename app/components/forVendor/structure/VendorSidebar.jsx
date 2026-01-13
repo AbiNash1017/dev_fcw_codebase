@@ -5,6 +5,17 @@ import Image from 'next/image'
 import { Menu, ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { Plus, Trash2, X } from 'lucide-react'
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 const VendorSidebar = ({ tabs, activeTab, setActiveTab, availableFacilities = [], onAddFacility, onDeleteFacility }) => {
     const [isCollapsed, setIsCollapsed] = useState(false)
@@ -120,16 +131,38 @@ const VendorSidebar = ({ tabs, activeTab, setActiveTab, availableFacilities = []
                                 </span>
                             </Button>
                             {!isCollapsed && (
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onDeleteFacility(facility);
-                                    }}
-                                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 text-gray-500 hover:text-red-500 rounded-full hover:bg-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    title="Delete Facility"
-                                >
-                                    <Trash2 size={14} />
-                                </button>
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <button
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 text-gray-500 hover:text-red-500 rounded-full hover:bg-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            title="Delete Facility"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Delete {getFacilityLabel(facility)}?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                This action cannot be undone. This will permanently delete this facility session
+                                                and all its scheduled slots.
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                            <AlertDialogAction
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onDeleteFacility(facility);
+                                                }}
+                                                className="bg-red-600 hover:bg-red-700"
+                                            >
+                                                Delete
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
                             )}
                         </div>
                     ))}

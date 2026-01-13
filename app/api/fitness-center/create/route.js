@@ -41,7 +41,7 @@ export async function POST(request) {
                 country: 'India', // Defaulting to India as per context
             },
             map_url: body.map_url,
-            phone_number: body.phone_number,
+            phone_number: body.phone_number || body.contact_no,
             email: body.email,
             subscription_plan_id: body.plan_id,
             is_active: true,

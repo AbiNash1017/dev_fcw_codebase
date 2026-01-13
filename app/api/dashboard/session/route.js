@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { adminAuth } from '@/lib/firebaseAdmin';
 import dbConnect from '@/lib/db';
 import Facility from '@/lib/models/facilities';
+import FitnessCenter from '@/lib/models/fitnessCenters';
 import CenterAdminMetadata from '@/lib/models/CenterAdminMetadata';
 
 // GET: Fetch existing session by Type for the current vendor
@@ -229,7 +230,8 @@ export async function DELETE(request) {
     const token = authHeader.split('Bearer ')[1];
 
     try {
-        await adminAuth.verifyIdToken(token);
+        const decodedToken = await adminAuth.verifyIdToken(token);
+        const uid = decodedToken.uid;
         await dbConnect();
 
         const { searchParams } = new URL(request.url);
@@ -239,16 +241,64 @@ export async function DELETE(request) {
             return NextResponse.json({ error: 'Session ID required' }, { status: 400 });
         }
 
-        const deletedFacility = await Facility.findByIdAndDelete(session_id);
+        console.log(`[DELETE] Attempting to delete session: ${session_id}`);
 
-        if (!deletedFacility) {
+        // First, find the facility to get its details before deletion
+        const facilityToDelete = await Facility.findById(session_id);
+
+        if (!facilityToDelete) {
+            console.log(`[DELETE] Session not found in Facility collection`);
             return NextResponse.json({ error: 'Session not found' }, { status: 404 });
         }
 
-        return NextResponse.json({ message: 'Session deleted successfully' });
+        console.log(`[DELETE] Found facility:`, {
+            id: facilityToDelete._id,
+            type: facilityToDelete.type,
+            fitness_center_id: facilityToDelete.fitness_center_id
+        });
+
+        // Delete the facility document
+        const deleteResult = await Facility.deleteOne({ _id: session_id });
+        console.log(`[DELETE] Delete operation result:`, deleteResult);
+
+        if (deleteResult.deletedCount === 0) {
+            console.error(`[DELETE] Failed to delete facility document`);
+            return NextResponse.json({ error: 'Failed to delete session' }, { status: 500 });
+        }
+
+        // Verify deletion
+        const verifyDeleted = await Facility.findById(session_id);
+        if (verifyDeleted) {
+            console.error(`[DELETE] WARNING: Facility still exists after deletion!`);
+            return NextResponse.json({ error: 'Deletion verification failed' }, { status: 500 });
+        }
+
+        console.log(`[DELETE] Facility successfully deleted and verified`);
+
+        // Remove from FitnessCenter available_facilities
+        if (facilityToDelete.fitness_center_id && facilityToDelete.type) {
+            console.log(`[DELETE] Removing type ${facilityToDelete.type} from FitnessCenter ${facilityToDelete.fitness_center_id}`);
+            const updateResult = await FitnessCenter.findByIdAndUpdate(
+                facilityToDelete.fitness_center_id,
+                { $pull: { available_facilities: facilityToDelete.type } },
+                { new: true }
+            );
+            console.log(`[DELETE] FitnessCenter update completed. Updated facilities:`, updateResult?.available_facilities);
+        }
+
+        return NextResponse.json({
+            message: 'Session deleted successfully',
+            deleted: {
+                id: session_id,
+                type: facilityToDelete.type
+            }
+        });
 
     } catch (error) {
-        console.error('Error deleting session:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        console.error('[DELETE] Error deleting session:', error);
+        return NextResponse.json({
+            error: 'Internal Server Error',
+            details: error.message
+        }, { status: 500 });
     }
 }

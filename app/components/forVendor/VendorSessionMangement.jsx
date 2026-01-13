@@ -262,6 +262,23 @@ const VendorSessionManagement = ({ facilityType }) => {
 
         const existingSlots = schedules[dayIndex] || [];
 
+        // Check for overlaps
+        const newStart = convertTimeToMinutes(currentSlot.start_time);
+        const newEnd = convertTimeToMinutes(currentSlot.end_time);
+
+        const hasOverlap = existingSlots.some(slot => {
+            const existingStart = convertTimeToMinutes(slot.start_time);
+            const existingEnd = convertTimeToMinutes(slot.end_time);
+
+            // Overlap condition: (StartA < EndB) and (EndA > StartB)
+            return (newStart < existingEnd) && (newEnd > existingStart);
+        });
+
+        if (hasOverlap) {
+            toast.error("This time slot overlaps with an existing session.");
+            return;
+        }
+
         // Use slot specific values
         const slotToAdd = {
             ...currentSlot,

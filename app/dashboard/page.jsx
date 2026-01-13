@@ -142,10 +142,46 @@ const VendorDashboard = () => {
     }
 
     const handleDeleteFacility = async (facilityToDelete) => {
-        if (!confirm(`Are you sure you want to remove ${facilityToDelete}?`)) return;
-
         try {
             const token = await user.getIdToken();
+
+            // First, find and delete the facility session from the Facility collection
+            // We need to find the session by fitness_center_id and type
+            const fitnessCenterId = await fetch('/api/dashboard/profile', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(res => res.json()).then(data => data.fitnessCenter?._id);
+
+            if (!fitnessCenterId) {
+                alert("Could not find fitness center ID");
+                return;
+            }
+
+            // Get the session ID for this facility type
+            const sessionResponse = await fetch(`/api/dashboard/session?type=${facilityToDelete}&fitness_center_id=${fitnessCenterId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (sessionResponse.ok) {
+                const sessionData = await sessionResponse.json();
+                const sessionId = sessionData.data?._id;
+
+                if (sessionId) {
+                    // Delete the facility session
+                    const deleteResponse = await fetch(`/api/dashboard/session?session_id=${sessionId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+
+                    if (!deleteResponse.ok) {
+                        const errorData = await deleteResponse.json();
+                        console.error("Failed to delete facility session:", errorData);
+                        alert(`Failed to delete facility session: ${errorData.error || 'Unknown error'}`);
+                        return;
+                    }
+                }
+            }
+
+            // Then remove from available_facilities list
             const newFacilities = availableFacilities.filter(f => f !== facilityToDelete);
 
             const response = await fetch('/api/fitness-center/update', {
@@ -163,7 +199,7 @@ const VendorDashboard = () => {
                     setActiveTab('overview');
                 }
             } else {
-                alert("Failed to remove facility");
+                alert("Failed to remove facility from list");
             }
         } catch (error) {
             console.error("Error removing facility:", error);
